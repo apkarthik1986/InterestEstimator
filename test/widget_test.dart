@@ -69,8 +69,8 @@ void main() {
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
-    // Find the calculate button
-    final calculateButton = find.widgetWithText(FilledButton, 'Calculate Interest');
+    // Find the calculate button by type (there's only one FilledButton in the UI)
+    final calculateButton = find.byType(FilledButton);
     expect(calculateButton, findsOneWidget);
     
     // Button should be disabled (onPressed is null)
