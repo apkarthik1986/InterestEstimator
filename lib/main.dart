@@ -200,29 +200,21 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
         marginBottom: 0,
       );
 
-      // Load Noto Sans font for consistent text rendering
-      final font = await PdfGoogleFonts.notoSansRegular();
-      final fontBold = await PdfGoogleFonts.notoSansBold();
-
       // Large font sizes for thermal printer readability
       final titleStyle = pw.TextStyle(
-        font: fontBold,
         fontSize: 16,
         fontWeight: pw.FontWeight.bold,
       );
       final headerStyle = pw.TextStyle(
-        font: fontBold,
         fontSize: 14,
         fontWeight: pw.FontWeight.bold,
       );
-      final labelStyle = pw.TextStyle(font: font, fontSize: 12);
+      const labelStyle = pw.TextStyle(fontSize: 12);
       final valueStyle = pw.TextStyle(
-        font: fontBold,
         fontSize: 14,
         fontWeight: pw.FontWeight.bold,
       );
       final totalStyle = pw.TextStyle(
-        font: fontBold,
         fontSize: 16,
         fontWeight: pw.FontWeight.bold,
       );
@@ -282,7 +274,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                 // Footer
                 pw.Text(
                   'Generated: ${_formatDate(DateTime.now())}',
-                  style: pw.TextStyle(font: font, fontSize: 10),
+                  style: const pw.TextStyle(fontSize: 10),
                 ),
               ],
             );
