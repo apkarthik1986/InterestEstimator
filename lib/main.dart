@@ -107,11 +107,28 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     return fractionalPart >= 0.07 ? months.ceil() : months.floor();
   }
 
-  void _calculateInterest() {
-    if (_formKey.currentState!.validate() && _loanDate != null) {
-      final amount = double.tryParse(_loanAmountController.text.replaceAll(',', ''));
-      if (amount == null || amount <= 0) return;
+  Future<void> _selectDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _loanDate ?? DateTime.now().subtract(const Duration(days: 30)),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      helpText: 'Select Loan Date',
+    );
+    if (picked != null) {
+      setState(() {
+        _loanDate = picked;
+      });
+      // Recalculate automatically when date changes
+      _tryCalculateInterest();
+    }
+  }
 
+  void _tryCalculateInterest() {
+    final amountText = _loanAmountController.text.replaceAll(',', '');
+    final amount = double.tryParse(amountText);
+    
+    if (amount != null && amount > 0 && _loanDate != null) {
       final today = DateTime.now();
       final months = _calculateMonths(_loanDate!, today);
       final monthlyRate = _interestRatePerMonth / 100;
@@ -127,23 +144,8 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
         _totalInterest = totalInterest;
         _totalAmount = totalAmount;
       });
-    }
-  }
-
-  Future<void> _selectDate() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _loanDate ?? DateTime.now().subtract(const Duration(days: 30)),
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now(),
-      helpText: 'Select Loan Date',
-    );
-    if (picked != null) {
-      setState(() {
-        _loanDate = picked;
-        // Clear previous results when date changes
-        _clearResults();
-      });
+    } else {
+      _clearResults();
     }
   }
 
@@ -243,9 +245,8 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
               await _saveBaseValues();
               if (context.mounted) {
                 Navigator.of(context).pop();
-                setState(() {
-                  _clearResults();
-                });
+                // Recalculate with the new interest rate
+                _tryCalculateInterest();
               }
             },
             child: const Text('Save'),
@@ -330,7 +331,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                   }
                   return null;
                 },
-                onChanged: (_) => _clearResults(),
+                onChanged: (_) => _tryCalculateInterest(),
               ),
               const SizedBox(height: 16),
               
@@ -353,17 +354,6 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                           : Theme.of(context).hintColor,
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              
-              // Calculate Button
-              FilledButton.icon(
-                onPressed: _loanDate != null ? _calculateInterest : null,
-                icon: const Icon(Icons.calculate),
-                label: const Text('Calculate Interest'),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
               ),
               const SizedBox(height: 24),
