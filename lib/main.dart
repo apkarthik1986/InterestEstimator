@@ -32,21 +32,21 @@ class InterestCalculatorPage extends StatefulWidget {
 class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   final _formKey = GlobalKey<FormState>();
   final _loanAmountController = TextEditingController();
+  final _interestRateController = TextEditingController(text: '2.0');
   DateTime? _loanDate;
   
   // Interest calculation results
   double? _loanAmount;
   int? _months;
+  double? _interestRate;
   double? _interestPerMonth;
   double? _totalInterest;
   double? _totalAmount;
-  
-  // Monthly interest rate (2% as per Excel)
-  static const double monthlyInterestRate = 0.02;
 
   @override
   void dispose() {
     _loanAmountController.dispose();
+    _interestRateController.dispose();
     super.dispose();
   }
 
@@ -58,8 +58,12 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     final double yearFrac = daysDiff / 365.0;
     double months = (yearFrac * 12) - 1;
     
+    // Handle negative values first before fractional part calculation
+    if (months < 0) {
+      return 0;
+    }
+    
     // Apply Excel rounding logic: if remainder >= 0.07, round up; else round down
-    if (months < 0) months = 0;
     final double fractionalPart = months - months.floor();
     return fractionalPart >= 0.07 ? months.ceil() : months.floor();
   }
@@ -67,17 +71,20 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   void _calculateInterest() {
     if (_formKey.currentState!.validate() && _loanDate != null) {
       final amount = double.tryParse(_loanAmountController.text.replaceAll(',', ''));
-      if (amount == null || amount <= 0) return;
+      final rate = double.tryParse(_interestRateController.text);
+      if (amount == null || amount <= 0 || rate == null || rate < 0) return;
 
       final today = DateTime.now();
       final months = _calculateMonths(_loanDate!, today);
-      final interestPerMonth = amount * monthlyInterestRate;
+      final monthlyRate = rate / 100;
+      final interestPerMonth = amount * monthlyRate;
       final totalInterest = interestPerMonth * months;
       final totalAmount = amount + totalInterest;
 
       setState(() {
         _loanAmount = amount;
         _months = months;
+        _interestRate = rate;
         _interestPerMonth = interestPerMonth;
         _totalInterest = totalInterest;
         _totalAmount = totalAmount;
@@ -103,16 +110,20 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   }
 
   void _clearResults() {
-    _loanAmount = null;
-    _months = null;
-    _interestPerMonth = null;
-    _totalInterest = null;
-    _totalAmount = null;
+    setState(() {
+      _loanAmount = null;
+      _months = null;
+      _interestRate = null;
+      _interestPerMonth = null;
+      _totalInterest = null;
+      _totalAmount = null;
+    });
   }
 
   void _reset() {
     setState(() {
       _loanAmountController.clear();
+      _interestRateController.text = '2.0';
       _loanDate = null;
       _clearResults();
     });
@@ -147,27 +158,6 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Info Card
-              Card(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                child: const Padding(
-                  padding: EdgeInsets.all(12.0),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Interest Rate: 2% per month',
-                          style: TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              
               // Loan Amount Input
               TextFormField(
                 controller: _loanAmountController,
@@ -188,6 +178,33 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                   final amount = double.tryParse(value.replaceAll(',', ''));
                   if (amount == null || amount <= 0) {
                     return 'Please enter a valid amount';
+                  }
+                  return null;
+                },
+                onChanged: (_) => _clearResults(),
+              ),
+              const SizedBox(height: 16),
+              
+              // Interest Rate Input
+              TextFormField(
+                controller: _interestRateController,
+                decoration: const InputDecoration(
+                  labelText: 'Interest Rate (% per month)',
+                  suffixText: '%',
+                  border: OutlineInputBorder(),
+                  hintText: 'e.g., 2.0',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
+                ],
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter interest rate';
+                  }
+                  final rate = double.tryParse(value);
+                  if (rate == null || rate < 0) {
+                    return 'Please enter a valid rate';
                   }
                   return null;
                 },
@@ -246,6 +263,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                         ),
                         const Divider(height: 24),
                         _buildResultRow('Loan Amount', _formatCurrency(_loanAmount!)),
+                        _buildResultRow('Interest Rate', '${_interestRate!.toStringAsFixed(2)}% / month'),
                         _buildResultRow('Loan Date', _formatDate(_loanDate!)),
                         _buildResultRow('Today\'s Date', _formatDate(DateTime.now())),
                         _buildResultRow('Duration', '$_months month${_months == 1 ? '' : 's'}'),

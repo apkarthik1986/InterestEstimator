@@ -4,16 +4,16 @@ A simple Flutter application for calculating pawn broker loan interest.
 
 ## Features
 
-- **Minimal Input**: Only 2 inputs required - Loan Amount and Loan Date
+- **Simple Input**: 3 inputs - Loan Amount, Interest Rate, and Loan Date
+- **Configurable Interest Rate**: Set your own monthly interest rate (default: 2%)
 - **Auto-calculation**: Automatically calculates duration from loan date to today
-- **Fixed Interest Rate**: 2% monthly interest (industry standard for pawn loans)
 - **Clear Summary**: Shows loan amount, duration, interest breakdown, and total amount
 
 ## Interest Calculation
 
 The app uses the following calculation logic (based on industry standard):
 
-- **Interest Rate**: 2% per month
+- **Interest Rate**: Configurable per month (default 2%)
 - **Duration**: Calculated using year fraction method with special rounding:
   - If fractional month >= 0.07, rounds up
   - Otherwise, rounds down

@@ -10,11 +10,9 @@ void main() {
     // Check app bar title
     expect(find.text('Pawn Broker Interest'), findsOneWidget);
     
-    // Check interest rate info
-    expect(find.text('Interest Rate: 2% per month'), findsOneWidget);
-    
     // Check input fields
     expect(find.text('Loan Amount'), findsOneWidget);
+    expect(find.text('Interest Rate (% per month)'), findsOneWidget);
     expect(find.text('Loan Date'), findsOneWidget);
     
     // Check calculate button
@@ -24,20 +22,15 @@ void main() {
     expect(find.byIcon(Icons.refresh), findsOneWidget);
   });
 
-  testWidgets('Loan amount validation works', (WidgetTester tester) async {
+  testWidgets('Interest rate has default value of 2.0', (WidgetTester tester) async {
     await tester.pumpWidget(const MyApp());
 
-    // Find and tap the loan amount field
-    final loanAmountField = find.byType(TextFormField);
-    expect(loanAmountField, findsOneWidget);
+    // Find all TextFormField widgets
+    final textFields = find.byType(TextFormField);
+    expect(textFields, findsNWidgets(2));
     
-    // Enter invalid amount and try to submit
-    await tester.enterText(loanAmountField, '');
-    await tester.pump();
-    
-    // The calculate button should be disabled without a date selected
-    final calculateButton = find.widgetWithText(FilledButton, 'Calculate Interest');
-    expect(calculateButton, findsOneWidget);
+    // Check that default interest rate is 2.0
+    expect(find.text('2.0'), findsOneWidget);
   });
 
   testWidgets('Date picker can be opened', (WidgetTester tester) async {
@@ -52,5 +45,17 @@ void main() {
     
     // Date picker dialog should appear
     expect(find.text('Select Loan Date'), findsOneWidget);
+  });
+
+  testWidgets('Calculate button is disabled without date', (WidgetTester tester) async {
+    await tester.pumpWidget(const MyApp());
+
+    // Find the calculate button
+    final calculateButton = find.widgetWithText(FilledButton, 'Calculate Interest');
+    expect(calculateButton, findsOneWidget);
+    
+    // Button should be disabled (onPressed is null)
+    final button = tester.widget<FilledButton>(calculateButton);
+    expect(button.onPressed, isNull);
   });
 }
