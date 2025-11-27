@@ -191,106 +191,113 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
       return;
     }
 
-    final pdf = pw.Document();
+    try {
+      final pdf = pw.Document();
 
-    // Thermal printer paper width is typically 58mm or 80mm
-    // Using 58mm width format which works on both
-    const pageWidth = 58.0 * PdfPageFormat.mm;
-    const pageMargin = 4.0 * PdfPageFormat.mm;
-    
-    final pageFormat = PdfPageFormat(
-      pageWidth,
-      double.infinity, // Allow content to determine height
-      marginAll: pageMargin,
-    );
+      // Use standard thermal receipt paper format (58mm width)
+      // Using roll format which is designed for receipt printers
+      final pageFormat = PdfPageFormat.roll57;
 
-    // Large font sizes for thermal printer readability
-    final titleStyle = pw.TextStyle(
-      fontSize: 16,
-      fontWeight: pw.FontWeight.bold,
-    );
-    final headerStyle = pw.TextStyle(
-      fontSize: 14,
-      fontWeight: pw.FontWeight.bold,
-    );
-    final labelStyle = const pw.TextStyle(fontSize: 12);
-    final valueStyle = pw.TextStyle(
-      fontSize: 14,
-      fontWeight: pw.FontWeight.bold,
-    );
-    final totalStyle = pw.TextStyle(
-      fontSize: 16,
-      fontWeight: pw.FontWeight.bold,
-    );
+      // Large font sizes for thermal printer readability
+      final titleStyle = pw.TextStyle(
+        fontSize: 16,
+        fontWeight: pw.FontWeight.bold,
+      );
+      final headerStyle = pw.TextStyle(
+        fontSize: 14,
+        fontWeight: pw.FontWeight.bold,
+      );
+      final labelStyle = const pw.TextStyle(fontSize: 12);
+      final valueStyle = pw.TextStyle(
+        fontSize: 14,
+        fontWeight: pw.FontWeight.bold,
+      );
+      final totalStyle = pw.TextStyle(
+        fontSize: 16,
+        fontWeight: pw.FontWeight.bold,
+      );
 
-    pdf.addPage(
-      pw.Page(
-        pageFormat: pageFormat,
-        build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.center,
-            children: [
-              // Header
-              pw.Text('INTEREST RECEIPT', style: titleStyle),
-              pw.SizedBox(height: 4),
-              pw.Container(
-                width: double.infinity,
-                child: pw.Divider(thickness: 1),
-              ),
-              pw.SizedBox(height: 8),
-              
-              // Loan Details Section
-              _buildPdfRow('Loan Amount:', _formatCurrency(_loanAmount!), labelStyle, valueStyle),
-              pw.SizedBox(height: 4),
-              _buildPdfRow('Rate:', '${_interestRate!.toStringAsFixed(2)}%/mo', labelStyle, valueStyle),
-              pw.SizedBox(height: 4),
-              _buildPdfRow('Loan Date:', _formatDate(_loanDate!), labelStyle, valueStyle),
-              pw.SizedBox(height: 4),
-              _buildPdfRow('Today:', _formatDate(DateTime.now()), labelStyle, valueStyle),
-              pw.SizedBox(height: 4),
-              _buildPdfRow('Duration:', '$_months month${_months == 1 ? '' : 's'}', labelStyle, valueStyle),
-              pw.SizedBox(height: 4),
-              _buildPdfRow('Int/Month:', _formatCurrency(_interestPerMonth!), labelStyle, valueStyle),
-              
-              pw.SizedBox(height: 8),
-              pw.Container(
-                width: double.infinity,
-                child: pw.Divider(thickness: 1),
-              ),
-              pw.SizedBox(height: 8),
-              
-              // Totals Section - Larger fonts
-              pw.Text('TOTAL INTEREST', style: headerStyle),
-              pw.SizedBox(height: 4),
-              pw.Text(_formatCurrency(_totalInterest!), style: totalStyle),
-              pw.SizedBox(height: 12),
-              pw.Text('TOTAL AMOUNT', style: headerStyle),
-              pw.SizedBox(height: 4),
-              pw.Text(_formatCurrency(_totalAmount!), style: totalStyle),
-              
-              pw.SizedBox(height: 12),
-              pw.Container(
-                width: double.infinity,
-                child: pw.Divider(thickness: 1),
-              ),
-              pw.SizedBox(height: 8),
-              
-              // Footer
-              pw.Text(
-                'Generated: ${_formatDate(DateTime.now())}',
-                style: const pw.TextStyle(fontSize: 10),
-              ),
-            ],
-          );
-        },
-      ),
-    );
+      pdf.addPage(
+        pw.Page(
+          pageFormat: pageFormat,
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                // Header
+                pw.Text('INTEREST RECEIPT', style: titleStyle),
+                pw.SizedBox(height: 4),
+                pw.Container(
+                  width: double.infinity,
+                  child: pw.Divider(thickness: 1),
+                ),
+                pw.SizedBox(height: 8),
+                
+                // Loan Details Section
+                _buildPdfRow('Loan Amount:', _formatCurrency(_loanAmount!), labelStyle, valueStyle),
+                pw.SizedBox(height: 4),
+                _buildPdfRow('Rate:', '${_interestRate!.toStringAsFixed(2)}%/mo', labelStyle, valueStyle),
+                pw.SizedBox(height: 4),
+                _buildPdfRow('Loan Date:', _formatDate(_loanDate!), labelStyle, valueStyle),
+                pw.SizedBox(height: 4),
+                _buildPdfRow('Today:', _formatDate(DateTime.now()), labelStyle, valueStyle),
+                pw.SizedBox(height: 4),
+                _buildPdfRow('Duration:', '$_months month${_months == 1 ? '' : 's'}', labelStyle, valueStyle),
+                pw.SizedBox(height: 4),
+                _buildPdfRow('Int/Month:', _formatCurrency(_interestPerMonth!), labelStyle, valueStyle),
+                
+                pw.SizedBox(height: 8),
+                pw.Container(
+                  width: double.infinity,
+                  child: pw.Divider(thickness: 1),
+                ),
+                pw.SizedBox(height: 8),
+                
+                // Totals Section - Larger fonts
+                pw.Text('TOTAL INTEREST', style: headerStyle),
+                pw.SizedBox(height: 4),
+                pw.Text(_formatCurrency(_totalInterest!), style: totalStyle),
+                pw.SizedBox(height: 12),
+                pw.Text('TOTAL AMOUNT', style: headerStyle),
+                pw.SizedBox(height: 4),
+                pw.Text(_formatCurrency(_totalAmount!), style: totalStyle),
+                
+                pw.SizedBox(height: 12),
+                pw.Container(
+                  width: double.infinity,
+                  child: pw.Divider(thickness: 1),
+                ),
+                pw.SizedBox(height: 8),
+                
+                // Footer
+                pw.Text(
+                  'Generated: ${_formatDate(DateTime.now())}',
+                  style: const pw.TextStyle(fontSize: 10),
+                ),
+              ],
+            );
+          },
+        ),
+      );
 
-    // Use Printing.layoutPdf which supports both printing and PDF save
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'Interest_Receipt_${DateTime.now().millisecondsSinceEpoch}',
-    );
+      // Generate readable filename with date
+      final dateStr = _formatDate(DateTime.now()).replaceAll('/', '-');
+      
+      // Use Printing.layoutPdf which supports both printing and PDF save
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+        name: 'Interest_Receipt_$dateStr',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error generating receipt: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   /// Helper to build PDF row with label and value
