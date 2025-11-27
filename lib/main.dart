@@ -200,7 +200,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
         marginBottom: 0,
       );
 
-      // Load Noto Sans font which supports the Indian Rupee symbol (₹)
+      // Load Noto Sans font for consistent text rendering
       final font = await PdfGoogleFonts.notoSansRegular();
       final fontBold = await PdfGoogleFonts.notoSansBold();
 
