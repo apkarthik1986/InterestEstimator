@@ -61,4 +61,13 @@ void main() {
     // Date picker dialog should appear
     expect(find.text('Select Loan Date'), findsOneWidget);
   });
+
+  testWidgets('Print button is not visible when no results are displayed', (WidgetTester tester) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    // Print button should not be visible when no results
+    expect(find.byIcon(Icons.print), findsNothing);
+    expect(find.text('Print / Save PDF'), findsNothing);
+  });
 }

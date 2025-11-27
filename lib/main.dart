@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 
 void main() {
   runApp(const MyApp());
@@ -174,6 +177,131 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
 
   String _formatDate(DateTime date) {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  /// Generate PDF document optimized for thermal printer (58mm/80mm)
+  /// Uses large fonts for readability on thermal printer receipts
+  Future<void> _printReceipt() async {
+    if (_totalAmount == null || _loanDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please calculate interest before printing'),
+        ),
+      );
+      return;
+    }
+
+    final pdf = pw.Document();
+
+    // Thermal printer paper width is typically 58mm or 80mm
+    // Using 58mm width format which works on both
+    const pageWidth = 58.0 * PdfPageFormat.mm;
+    const pageMargin = 4.0 * PdfPageFormat.mm;
+    
+    final pageFormat = PdfPageFormat(
+      pageWidth,
+      double.infinity, // Allow content to determine height
+      marginAll: pageMargin,
+    );
+
+    // Large font sizes for thermal printer readability
+    final titleStyle = pw.TextStyle(
+      fontSize: 16,
+      fontWeight: pw.FontWeight.bold,
+    );
+    final headerStyle = pw.TextStyle(
+      fontSize: 14,
+      fontWeight: pw.FontWeight.bold,
+    );
+    final labelStyle = const pw.TextStyle(fontSize: 12);
+    final valueStyle = pw.TextStyle(
+      fontSize: 14,
+      fontWeight: pw.FontWeight.bold,
+    );
+    final totalStyle = pw.TextStyle(
+      fontSize: 16,
+      fontWeight: pw.FontWeight.bold,
+    );
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: pageFormat,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              // Header
+              pw.Text('INTEREST RECEIPT', style: titleStyle),
+              pw.SizedBox(height: 4),
+              pw.Container(
+                width: double.infinity,
+                child: pw.Divider(thickness: 1),
+              ),
+              pw.SizedBox(height: 8),
+              
+              // Loan Details Section
+              _buildPdfRow('Loan Amount:', _formatCurrency(_loanAmount!), labelStyle, valueStyle),
+              pw.SizedBox(height: 4),
+              _buildPdfRow('Rate:', '${_interestRate!.toStringAsFixed(2)}%/mo', labelStyle, valueStyle),
+              pw.SizedBox(height: 4),
+              _buildPdfRow('Loan Date:', _formatDate(_loanDate!), labelStyle, valueStyle),
+              pw.SizedBox(height: 4),
+              _buildPdfRow('Today:', _formatDate(DateTime.now()), labelStyle, valueStyle),
+              pw.SizedBox(height: 4),
+              _buildPdfRow('Duration:', '$_months month${_months == 1 ? '' : 's'}', labelStyle, valueStyle),
+              pw.SizedBox(height: 4),
+              _buildPdfRow('Int/Month:', _formatCurrency(_interestPerMonth!), labelStyle, valueStyle),
+              
+              pw.SizedBox(height: 8),
+              pw.Container(
+                width: double.infinity,
+                child: pw.Divider(thickness: 1),
+              ),
+              pw.SizedBox(height: 8),
+              
+              // Totals Section - Larger fonts
+              pw.Text('TOTAL INTEREST', style: headerStyle),
+              pw.SizedBox(height: 4),
+              pw.Text(_formatCurrency(_totalInterest!), style: totalStyle),
+              pw.SizedBox(height: 12),
+              pw.Text('TOTAL AMOUNT', style: headerStyle),
+              pw.SizedBox(height: 4),
+              pw.Text(_formatCurrency(_totalAmount!), style: totalStyle),
+              
+              pw.SizedBox(height: 12),
+              pw.Container(
+                width: double.infinity,
+                child: pw.Divider(thickness: 1),
+              ),
+              pw.SizedBox(height: 8),
+              
+              // Footer
+              pw.Text(
+                'Generated: ${_formatDate(DateTime.now())}',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    // Use Printing.layoutPdf which supports both printing and PDF save
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'Interest_Receipt_${DateTime.now().millisecondsSinceEpoch}',
+    );
+  }
+
+  /// Helper to build PDF row with label and value
+  pw.Widget _buildPdfRow(String label, String value, pw.TextStyle labelStyle, pw.TextStyle valueStyle) {
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Text(label, style: labelStyle),
+        pw.Text(value, style: valueStyle),
+      ],
+    );
   }
 
   void _showSettingsDialog() {
@@ -394,6 +522,24 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                           highlightColor: Colors.green,
                         ),
                       ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Print Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: _printReceipt,
+                    icon: const Icon(Icons.print, size: 28),
+                    label: const Text(
+                      'Print / Save PDF',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     ),
                   ),
                 ),
