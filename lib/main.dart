@@ -328,7 +328,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('⚙️ Base Settings'),
         content: SingleChildScrollView(
           child: Column(
@@ -378,23 +378,23 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           TextButton(
             onPressed: () async {
               await _resetToDefaults();
-              if (context.mounted) Navigator.of(context).pop();
+              if (dialogContext.mounted) Navigator.of(dialogContext).pop();
             },
             child: const Text('Reset to Default'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () async {
               await _saveBaseValues();
-              if (context.mounted) {
-                Navigator.of(context).pop();
+              if (dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
                 // Recalculate with the new interest rate
                 _tryCalculateInterest();
                 // Show green success snackbar
-                ScaffoldMessenger.of(this.context).showSnackBar(
+                ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Settings saved successfully'),
                     backgroundColor: Colors.green,
