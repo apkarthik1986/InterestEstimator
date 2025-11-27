@@ -1,6 +1,6 @@
 # InterestEstimator
 
-A simple Flutter application.
+A simple Flutter application for Android.
 
 ## Getting Started
 

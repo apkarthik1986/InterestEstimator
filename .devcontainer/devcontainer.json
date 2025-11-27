@@ -2,7 +2,9 @@
   "name": "Flutter Development",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
   "features": {
-    "ghcr.io/jarrodcolburn/features/flutter-sdk:0": {}
+    "ghcr.io/jarrodcolburn/features/flutter-sdk:0": {
+      "version": "3.24.5"
+    }
   },
   "customizations": {
     "vscode": {
