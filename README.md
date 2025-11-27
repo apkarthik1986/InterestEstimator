@@ -1,6 +1,24 @@
 # InterestEstimator
 
-A simple Flutter application for Android.
+A simple Flutter application for calculating pawn broker loan interest.
+
+## Features
+
+- **Simple Input**: 3 inputs - Loan Amount, Interest Rate, and Loan Date
+- **Configurable Interest Rate**: Set your own monthly interest rate (default: 2%)
+- **Auto-calculation**: Automatically calculates duration from loan date to today
+- **Clear Summary**: Shows loan amount, duration, interest breakdown, and total amount
+
+## Interest Calculation
+
+The app uses the following calculation logic (based on industry standard):
+
+- **Interest Rate**: Configurable per month (default 2%)
+- **Duration**: Calculated using year fraction method with special rounding:
+  - If fractional month >= 0.07, rounds up
+  - Otherwise, rounds down
+- **Total Interest**: Interest per month × Number of months
+- **Total Amount**: Loan Amount + Total Interest
 
 ## Getting Started
 
