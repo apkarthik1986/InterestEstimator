@@ -1,0 +1,2 @@
+rootProject.name = 'android'
+apply from: "$projectDir/app/flutter_settings.gradle"
