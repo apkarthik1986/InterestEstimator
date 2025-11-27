@@ -393,6 +393,14 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                 Navigator.of(context).pop();
                 // Recalculate with the new interest rate
                 _tryCalculateInterest();
+                // Show green success snackbar
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Settings saved successfully'),
+                    backgroundColor: Colors.green,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
               }
             },
             child: const Text('Save'),
@@ -428,32 +436,6 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Current Interest Rate Display
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.amber.shade200),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.percent, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Interest Rate: ${_interestRatePerMonth.toStringAsFixed(2)}% per month',
-                      style: const TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: _showSettingsDialog,
-                      child: const Text('Change'),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              
               // Loan Amount Input
               TextFormField(
                 controller: _loanAmountController,
