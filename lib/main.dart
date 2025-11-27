@@ -196,7 +196,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
 
       // Use standard thermal receipt paper format (58mm width)
       // Using roll format which is designed for receipt printers
-      final pageFormat = PdfPageFormat.roll57;
+      const pageFormat = PdfPageFormat.roll57;
 
       // Large font sizes for thermal printer readability
       final titleStyle = pw.TextStyle(
@@ -207,7 +207,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
         fontSize: 14,
         fontWeight: pw.FontWeight.bold,
       );
-      final labelStyle = const pw.TextStyle(fontSize: 12);
+      const labelStyle = pw.TextStyle(fontSize: 12);
       final valueStyle = pw.TextStyle(
         fontSize: 14,
         fontWeight: pw.FontWeight.bold,
