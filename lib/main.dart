@@ -198,21 +198,29 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
       // Using roll format which is designed for receipt printers
       const pageFormat = PdfPageFormat.roll57;
 
+      // Load Noto Sans font which supports the Indian Rupee symbol (₹)
+      final font = await PdfGoogleFonts.notoSansRegular();
+      final fontBold = await PdfGoogleFonts.notoSansBold();
+
       // Large font sizes for thermal printer readability
       final titleStyle = pw.TextStyle(
+        font: fontBold,
         fontSize: 16,
         fontWeight: pw.FontWeight.bold,
       );
       final headerStyle = pw.TextStyle(
+        font: fontBold,
         fontSize: 14,
         fontWeight: pw.FontWeight.bold,
       );
-      const labelStyle = pw.TextStyle(fontSize: 12);
+      final labelStyle = pw.TextStyle(font: font, fontSize: 12);
       final valueStyle = pw.TextStyle(
+        font: fontBold,
         fontSize: 14,
         fontWeight: pw.FontWeight.bold,
       );
       final totalStyle = pw.TextStyle(
+        font: fontBold,
         fontSize: 16,
         fontWeight: pw.FontWeight.bold,
       );
@@ -272,7 +280,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                 // Footer
                 pw.Text(
                   'Generated: ${_formatDate(DateTime.now())}',
-                  style: const pw.TextStyle(fontSize: 10),
+                  style: pw.TextStyle(font: font, fontSize: 10),
                 ),
               ],
             );
