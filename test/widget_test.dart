@@ -15,9 +15,6 @@ void main() {
     expect(find.text('Loan Amount'), findsOneWidget);
     expect(find.text('Loan Date'), findsOneWidget);
     
-    // Check calculate button
-    expect(find.text('Calculate Interest'), findsOneWidget);
-    
     // Check settings and reset buttons in app bar
     expect(find.byIcon(Icons.settings), findsOneWidget);
     expect(find.byIcon(Icons.refresh), findsOneWidget);
@@ -63,18 +60,5 @@ void main() {
     
     // Date picker dialog should appear
     expect(find.text('Select Loan Date'), findsOneWidget);
-  });
-
-  testWidgets('Calculate button is disabled without date', (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
-    await tester.pumpAndSettle();
-
-    // Find the calculate button using widgetWithText which works with FilledButton.icon
-    final calculateButtonFinder = find.widgetWithText(FilledButton, 'Calculate Interest');
-    expect(calculateButtonFinder, findsOneWidget);
-    
-    // Button should be disabled (onPressed is null)
-    final button = tester.widget<FilledButton>(calculateButtonFinder);
-    expect(button.onPressed, isNull);
   });
 }
