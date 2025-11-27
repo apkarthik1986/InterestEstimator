@@ -194,28 +194,42 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     try {
       final pdf = pw.Document();
 
-      // Use standard thermal receipt paper format (58mm width)
-      // Using roll format which is designed for receipt printers
-      const pageFormat = PdfPageFormat.roll57;
+      // Load Google Font that supports Rupee symbol
+      final font = await PdfGoogleFonts.notoSansRegular();
+      final fontBold = await PdfGoogleFonts.notoSansBold();
 
-      // Large font sizes for thermal printer readability
+      // Use standard thermal receipt paper format (58mm width)
+      // Reduced margins for better space utilization
+      final pageFormat = PdfPageFormat.roll57.copyWith(
+        marginLeft: 4,
+        marginRight: 4,
+        marginTop: 8,
+        marginBottom: 8,
+      );
+
+      // Increased font sizes for better readability
       final titleStyle = pw.TextStyle(
-        fontSize: 16,
+        font: fontBold,
+        fontSize: 20,
         fontWeight: pw.FontWeight.bold,
       );
       final headerStyle = pw.TextStyle(
-        fontSize: 14,
+        font: fontBold,
+        fontSize: 18,
         fontWeight: pw.FontWeight.bold,
       );
-      const labelStyle = pw.TextStyle(fontSize: 12);
+      final labelStyle = pw.TextStyle(font: font, fontSize: 16);
       final valueStyle = pw.TextStyle(
-        fontSize: 14,
+        font: fontBold,
+        fontSize: 18,
         fontWeight: pw.FontWeight.bold,
       );
       final totalStyle = pw.TextStyle(
-        fontSize: 16,
+        font: fontBold,
+        fontSize: 22,
         fontWeight: pw.FontWeight.bold,
       );
+      final footerStyle = pw.TextStyle(font: font, fontSize: 14);
 
       pdf.addPage(
         pw.Page(
@@ -226,53 +240,53 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
               children: [
                 // Header
                 pw.Text('INTEREST RECEIPT', style: titleStyle),
-                pw.SizedBox(height: 4),
+                pw.SizedBox(height: 6),
                 pw.Container(
                   width: double.infinity,
                   child: pw.Divider(thickness: 1),
                 ),
-                pw.SizedBox(height: 8),
+                pw.SizedBox(height: 10),
                 
                 // Loan Details Section
                 _buildPdfRow('Loan Amount:', _formatCurrency(_loanAmount!), labelStyle, valueStyle),
-                pw.SizedBox(height: 4),
+                pw.SizedBox(height: 6),
                 _buildPdfRow('Rate:', '${_interestRate!.toStringAsFixed(2)}%/mo', labelStyle, valueStyle),
-                pw.SizedBox(height: 4),
+                pw.SizedBox(height: 6),
                 _buildPdfRow('Loan Date:', _formatDate(_loanDate!), labelStyle, valueStyle),
-                pw.SizedBox(height: 4),
+                pw.SizedBox(height: 6),
                 _buildPdfRow('Today:', _formatDate(DateTime.now()), labelStyle, valueStyle),
-                pw.SizedBox(height: 4),
+                pw.SizedBox(height: 6),
                 _buildPdfRow('Duration:', '$_months month${_months == 1 ? '' : 's'}', labelStyle, valueStyle),
-                pw.SizedBox(height: 4),
+                pw.SizedBox(height: 6),
                 _buildPdfRow('Int/Month:', _formatCurrency(_interestPerMonth!), labelStyle, valueStyle),
                 
-                pw.SizedBox(height: 8),
+                pw.SizedBox(height: 10),
                 pw.Container(
                   width: double.infinity,
                   child: pw.Divider(thickness: 1),
                 ),
-                pw.SizedBox(height: 8),
+                pw.SizedBox(height: 10),
                 
                 // Totals Section - Larger fonts
                 pw.Text('TOTAL INTEREST', style: headerStyle),
-                pw.SizedBox(height: 4),
+                pw.SizedBox(height: 6),
                 pw.Text(_formatCurrency(_totalInterest!), style: totalStyle),
-                pw.SizedBox(height: 12),
+                pw.SizedBox(height: 14),
                 pw.Text('TOTAL AMOUNT', style: headerStyle),
-                pw.SizedBox(height: 4),
+                pw.SizedBox(height: 6),
                 pw.Text(_formatCurrency(_totalAmount!), style: totalStyle),
                 
-                pw.SizedBox(height: 12),
+                pw.SizedBox(height: 14),
                 pw.Container(
                   width: double.infinity,
                   child: pw.Divider(thickness: 1),
                 ),
-                pw.SizedBox(height: 8),
+                pw.SizedBox(height: 10),
                 
                 // Footer
                 pw.Text(
                   'Generated: ${_formatDate(DateTime.now())}',
-                  style: const pw.TextStyle(fontSize: 10),
+                  style: footerStyle,
                 ),
               ],
             );
