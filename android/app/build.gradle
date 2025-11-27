@@ -23,7 +23,7 @@ if (flutterVersionName == null) {
 }
 
 android {
-    namespace "com.example.interest_estimator"
+    namespace "com.gurudev.interest_estimator"
     compileSdk 34
     ndkVersion flutter.ndkVersion
 
@@ -41,7 +41,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.example.interest_estimator"
+        applicationId "com.gurudev.interest_estimator"
         minSdk 26
         targetSdk 34
         versionCode flutterVersionCode.toInteger()

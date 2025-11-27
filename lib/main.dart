@@ -172,7 +172,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   }
 
   String _formatCurrency(double value) {
-    return 'Rs.${value.toStringAsFixed(2)}';
+    return 'Rs.${value.round()}';
   }
 
   String _formatDate(DateTime date) {
@@ -579,14 +579,14 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
             label,
             style: TextStyle(
               fontSize: isHighlight ? 16 : 14,
-              fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal,
+              fontWeight: FontWeight.bold,
             ),
           ),
           Text(
             value,
             style: TextStyle(
               fontSize: isHighlight ? 18 : 14,
-              fontWeight: isHighlight ? FontWeight.bold : FontWeight.w500,
+              fontWeight: FontWeight.bold,
               color: highlightColor,
             ),
           ),
