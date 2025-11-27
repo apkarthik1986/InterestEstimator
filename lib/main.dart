@@ -230,7 +230,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           TextButton(
             onPressed: () async {
               await _resetToDefaults();
-              Navigator.of(context).pop();
+              if (context.mounted) Navigator.of(context).pop();
             },
             child: const Text('Reset to Default'),
           ),
@@ -241,10 +241,12 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           ElevatedButton(
             onPressed: () async {
               await _saveBaseValues();
-              Navigator.of(context).pop();
-              setState(() {
-                _clearResults();
-              });
+              if (context.mounted) {
+                Navigator.of(context).pop();
+                setState(() {
+                  _clearResults();
+                });
+              }
             },
             child: const Text('Save'),
           ),
