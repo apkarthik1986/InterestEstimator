@@ -20,15 +20,13 @@ void main() {
     expect(find.byIcon(Icons.refresh), findsOneWidget);
   });
 
-  testWidgets('Interest rate is displayed and default is 2.0', (WidgetTester tester) async {
+  testWidgets('Interest rate box and Change button are not displayed on main page', (WidgetTester tester) async {
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
-    // Check that default interest rate is displayed
-    expect(find.textContaining('2.00% per month'), findsOneWidget);
-    
-    // Check Change button to access settings
-    expect(find.text('Change'), findsOneWidget);
+    // Interest rate box and Change button should NOT be visible on main page
+    expect(find.textContaining('2.00% per month'), findsNothing);
+    expect(find.text('Change'), findsNothing);
   });
 
   testWidgets('Settings dialog can be opened', (WidgetTester tester) async {
