@@ -231,7 +231,6 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
             onPressed: () async {
               await _resetToDefaults();
               Navigator.of(context).pop();
-              setState(() {});
             },
             child: const Text('Reset to Default'),
           ),
