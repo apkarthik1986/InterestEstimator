@@ -69,11 +69,8 @@ void main() {
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
-    // Find the calculate button by finding an ancestor of the "Calculate Interest" text
-    final calculateButtonFinder = find.ancestor(
-      of: find.text('Calculate Interest'),
-      matching: find.byType(FilledButton),
-    );
+    // Find the calculate button using widgetWithText which works with FilledButton.icon
+    final calculateButtonFinder = find.widgetWithText(FilledButton, 'Calculate Interest');
     expect(calculateButtonFinder, findsOneWidget);
     
     // Button should be disabled (onPressed is null)
