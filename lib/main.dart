@@ -200,29 +200,21 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
         marginBottom: 0,
       );
 
-      // Load Noto Sans font for consistent text rendering
-      final font = await PdfGoogleFonts.notoSansRegular();
-      final fontBold = await PdfGoogleFonts.notoSansBold();
-
       // Large font sizes for thermal printer readability
       final titleStyle = pw.TextStyle(
-        font: fontBold,
         fontSize: 16,
         fontWeight: pw.FontWeight.bold,
       );
       final headerStyle = pw.TextStyle(
-        font: fontBold,
         fontSize: 14,
         fontWeight: pw.FontWeight.bold,
       );
-      final labelStyle = pw.TextStyle(font: font, fontSize: 12);
+      const labelStyle = pw.TextStyle(fontSize: 12);
       final valueStyle = pw.TextStyle(
-        font: fontBold,
         fontSize: 14,
         fontWeight: pw.FontWeight.bold,
       );
       final totalStyle = pw.TextStyle(
-        font: fontBold,
         fontSize: 16,
         fontWeight: pw.FontWeight.bold,
       );
@@ -282,7 +274,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                 // Footer
                 pw.Text(
                   'Generated: ${_formatDate(DateTime.now())}',
-                  style: pw.TextStyle(font: font, fontSize: 10),
+                  style: const pw.TextStyle(fontSize: 10),
                 ),
               ],
             );
@@ -328,7 +320,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('⚙️ Base Settings'),
         content: SingleChildScrollView(
           child: Column(
@@ -378,22 +370,32 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           TextButton(
             onPressed: () async {
               await _resetToDefaults();
-              if (context.mounted) Navigator.of(context).pop();
+              if (dialogContext.mounted) Navigator.of(dialogContext).pop();
             },
             child: const Text('Reset to Default'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () async {
               await _saveBaseValues();
-              if (context.mounted) {
-                Navigator.of(context).pop();
-                // Recalculate with the new interest rate
-                _tryCalculateInterest();
+              if (dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
               }
+              // Check if widget is still mounted before using context
+              if (!mounted) return;
+              // Recalculate with the new interest rate
+              _tryCalculateInterest();
+              // Show green success snackbar
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Settings saved successfully'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ),
+              );
             },
             child: const Text('Save'),
           ),
@@ -428,32 +430,6 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Current Interest Rate Display
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.amber.shade200),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.percent, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Interest Rate: ${_interestRatePerMonth.toStringAsFixed(2)}% per month',
-                      style: const TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: _showSettingsDialog,
-                      child: const Text('Change'),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              
               // Loan Amount Input
               TextFormField(
                 controller: _loanAmountController,
