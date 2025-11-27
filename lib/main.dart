@@ -172,7 +172,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   }
 
   String _formatCurrency(double value) {
-    return '₹${value.toStringAsFixed(2)}';
+    return 'Rs.${value.toStringAsFixed(2)}';
   }
 
   String _formatDate(DateTime date) {
@@ -195,10 +195,12 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
       final pdf = pw.Document();
 
       // Use standard thermal receipt paper format (58mm width)
-      // Using roll format which is designed for receipt printers
-      const pageFormat = PdfPageFormat.roll57;
+      // Using roll format with minimal margins to prevent extra space at bottom
+      final pageFormat = PdfPageFormat.roll57.copyWith(
+        marginBottom: 0,
+      );
 
-      // Load Noto Sans font which supports the Indian Rupee symbol (₹)
+      // Load Noto Sans font for consistent text rendering
       final font = await PdfGoogleFonts.notoSansRegular();
       final fontBold = await PdfGoogleFonts.notoSansBold();
 
@@ -287,6 +289,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           },
         ),
       );
+      // Note: pw.Page with roll format naturally sizes to content
 
       // Generate readable filename with date
       final dateStr = _formatDate(DateTime.now()).replaceAll('/', '-');
@@ -549,7 +552,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                     onPressed: _printReceipt,
                     icon: const Icon(Icons.print, size: 28),
                     label: const Text(
-                      'Print / Save PDF',
+                      'Print',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     style: ElevatedButton.styleFrom(
