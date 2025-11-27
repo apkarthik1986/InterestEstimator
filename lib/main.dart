@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const MyApp());
@@ -32,8 +33,13 @@ class InterestCalculatorPage extends StatefulWidget {
 class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   final _formKey = GlobalKey<FormState>();
   final _loanAmountController = TextEditingController();
-  final _interestRateController = TextEditingController(text: '2.0');
   DateTime? _loanDate;
+  
+  // Base settings (configurable via settings dialog)
+  double _interestRatePerMonth = 2.0;
+  
+  // Settings dialog controller
+  late final TextEditingController _settingsInterestRateController;
   
   // Interest calculation results
   double? _loanAmount;
@@ -44,10 +50,43 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   double? _totalAmount;
 
   @override
+  void initState() {
+    super.initState();
+    _settingsInterestRateController = TextEditingController();
+    _loadBaseValues();
+  }
+
+  @override
   void dispose() {
     _loanAmountController.dispose();
-    _interestRateController.dispose();
+    _settingsInterestRateController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadBaseValues() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _interestRatePerMonth = prefs.getDouble('interest_rate') ?? 2.0;
+      _updateSettingsControllers();
+    });
+  }
+
+  void _updateSettingsControllers() {
+    _settingsInterestRateController.text = _interestRatePerMonth.toString();
+  }
+
+  Future<void> _saveBaseValues() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('interest_rate', _interestRatePerMonth);
+  }
+
+  Future<void> _resetToDefaults() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _interestRatePerMonth = 2.0;
+      _settingsInterestRateController.text = '2.0';
+    });
+    await prefs.setDouble('interest_rate', 2.0);
   }
 
   /// Calculate months between loan date and today using the Excel logic:
@@ -71,12 +110,11 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   void _calculateInterest() {
     if (_formKey.currentState!.validate() && _loanDate != null) {
       final amount = double.tryParse(_loanAmountController.text.replaceAll(',', ''));
-      final rate = double.tryParse(_interestRateController.text);
-      if (amount == null || amount <= 0 || rate == null || rate < 0) return;
+      if (amount == null || amount <= 0) return;
 
       final today = DateTime.now();
       final months = _calculateMonths(_loanDate!, today);
-      final monthlyRate = rate / 100;
+      final monthlyRate = _interestRatePerMonth / 100;
       final interestPerMonth = amount * monthlyRate;
       final totalInterest = interestPerMonth * months;
       final totalAmount = amount + totalInterest;
@@ -84,7 +122,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
       setState(() {
         _loanAmount = amount;
         _months = months;
-        _interestRate = rate;
+        _interestRate = _interestRatePerMonth;
         _interestPerMonth = interestPerMonth;
         _totalInterest = totalInterest;
         _totalAmount = totalAmount;
@@ -123,7 +161,6 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   void _reset() {
     setState(() {
       _loanAmountController.clear();
-      _interestRateController.text = '2.0';
       _loanDate = null;
       _clearResults();
     });
@@ -137,6 +174,86 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
+  void _showSettingsDialog() {
+    // Update controller with current value before showing dialog
+    _updateSettingsControllers();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('⚙️ Base Settings'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Interest Rate Settings',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              TextField(
+                decoration: const InputDecoration(
+                  labelText: 'Interest Rate (% per month)',
+                  border: OutlineInputBorder(),
+                  hintText: 'e.g., 2.0',
+                  suffixText: '%',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                controller: _settingsInterestRateController,
+                onChanged: (value) {
+                  _interestRatePerMonth = double.tryParse(value) ?? 2.0;
+                },
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'This rate will be used for all interest calculations.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await _resetToDefaults();
+              Navigator.of(context).pop();
+              setState(() {});
+            },
+            child: const Text('Reset to Default'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await _saveBaseValues();
+              Navigator.of(context).pop();
+              setState(() {
+                _clearResults();
+              });
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -144,6 +261,11 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: const Text('Pawn Broker Interest'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: _showSettingsDialog,
+            tooltip: 'Settings',
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _reset,
@@ -158,6 +280,32 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Current Interest Rate Display
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.percent, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Interest Rate: ${_interestRatePerMonth.toStringAsFixed(2)}% per month',
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: _showSettingsDialog,
+                      child: const Text('Change'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              
               // Loan Amount Input
               TextFormField(
                 controller: _loanAmountController,
@@ -178,33 +326,6 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                   final amount = double.tryParse(value.replaceAll(',', ''));
                   if (amount == null || amount <= 0) {
                     return 'Please enter a valid amount';
-                  }
-                  return null;
-                },
-                onChanged: (_) => _clearResults(),
-              ),
-              const SizedBox(height: 16),
-              
-              // Interest Rate Input
-              TextFormField(
-                controller: _interestRateController,
-                decoration: const InputDecoration(
-                  labelText: 'Interest Rate (% per month)',
-                  suffixText: '%',
-                  border: OutlineInputBorder(),
-                  hintText: 'e.g., 2.0',
-                ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
-                ],
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter interest rate';
-                  }
-                  final rate = double.tryParse(value);
-                  if (rate == null || rate < 0) {
-                    return 'Please enter a valid rate';
                   }
                   return null;
                 },
