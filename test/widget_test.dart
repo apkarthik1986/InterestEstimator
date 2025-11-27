@@ -69,12 +69,15 @@ void main() {
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
-    // Find the calculate button by type (there's only one FilledButton in the UI)
-    final calculateButton = find.byType(FilledButton);
-    expect(calculateButton, findsOneWidget);
+    // Find the calculate button by finding an ancestor of the "Calculate Interest" text
+    final calculateButtonFinder = find.ancestor(
+      of: find.text('Calculate Interest'),
+      matching: find.byType(FilledButton),
+    );
+    expect(calculateButtonFinder, findsOneWidget);
     
     // Button should be disabled (onPressed is null)
-    final button = tester.widget<FilledButton>(calculateButton);
+    final button = tester.widget<FilledButton>(calculateButtonFinder);
     expect(button.onPressed, isNull);
   });
 }
