@@ -391,17 +391,19 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
               await _saveBaseValues();
               if (dialogContext.mounted) {
                 Navigator.of(dialogContext).pop();
-                // Recalculate with the new interest rate
-                _tryCalculateInterest();
-                // Show green success snackbar
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Settings saved successfully'),
-                    backgroundColor: Colors.green,
-                    duration: Duration(seconds: 2),
-                  ),
-                );
               }
+              // Check if widget is still mounted before using context
+              if (!mounted) return;
+              // Recalculate with the new interest rate
+              _tryCalculateInterest();
+              // Show green success snackbar
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Settings saved successfully'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ),
+              );
             },
             child: const Text('Save'),
           ),
