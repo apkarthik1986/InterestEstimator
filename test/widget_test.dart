@@ -12,12 +12,16 @@ void main() {
     expect(find.text('Pawn Broker Interest'), findsOneWidget);
     
     // Check input fields
+    expect(find.text('Loan Number'), findsOneWidget);
     expect(find.text('Loan Amount'), findsOneWidget);
     expect(find.text('Loan Date'), findsOneWidget);
     
     // Check settings and reset buttons in app bar
     expect(find.byIcon(Icons.settings), findsOneWidget);
     expect(find.byIcon(Icons.refresh), findsOneWidget);
+    
+    // Check Search button for loan lookup
+    expect(find.text('Search'), findsOneWidget);
   });
 
   testWidgets('Interest rate box and Change button are not displayed on main page', (WidgetTester tester) async {
@@ -67,5 +71,21 @@ void main() {
     // Print button should not be visible when no results
     expect(find.byIcon(Icons.print), findsNothing);
     expect(find.text('Print / Save PDF'), findsNothing);
+  });
+
+  testWidgets('Loan number input field accepts numeric input', (WidgetTester tester) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    // Find loan number input field
+    final loanNumberField = find.byType(TextFormField).first;
+    expect(loanNumberField, findsOneWidget);
+    
+    // Enter a loan number
+    await tester.enterText(loanNumberField, '21245656');
+    await tester.pumpAndSettle();
+    
+    // Verify the text was entered
+    expect(find.text('21245656'), findsOneWidget);
   });
 }
