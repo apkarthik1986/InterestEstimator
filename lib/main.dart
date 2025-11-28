@@ -42,14 +42,13 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   final _loanNumberController = TextEditingController();
   DateTime? _loanDate;
   
-  // Loan ledger data loaded from Excel - indexed by loan number for O(1) lookup
-  Map<String, Map<String, dynamic>> _loanLedger = {};
-  bool _isLedgerLoaded = false;
+  // Flag to track if a valid Excel file path is configured
+  bool _isFileConfigured = false;
   String? _loanLookupError;
   
   // Base settings (configurable via settings dialog)
   double _interestRatePerMonth = 2.0;
-  String _excelFilePath = '';  // Empty means use bundled asset
+  String _excelFilePath = '';  // Path to Excel file selected via file picker
   
   // Settings dialog controller
   late final TextEditingController _settingsInterestRateController;
@@ -71,108 +70,143 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     _loadBaseValues();
   }
 
-  Future<void> _loadLoanLedger() async {
+  /// Load loan data from Excel file in real-time for a given loan number
+  /// Returns the loan data if found, or null if not found
+  Future<Map<String, dynamic>?> _loadLoanFromExcel(String loanNumber) async {
+    if (_excelFilePath.isEmpty) {
+      setState(() {
+        _isFileConfigured = false;
+        _loanLookupError = 'Please select an Excel file in Settings';
+      });
+      return null;
+    }
+
     try {
-      Uint8List bytes;
+      final file = File(_excelFilePath);
+      if (!await file.exists()) {
+        setState(() {
+          _isFileConfigured = false;
+          _loanLookupError = 'Excel file not found at the specified path';
+        });
+        return null;
+      }
       
-      if (_excelFilePath.isNotEmpty) {
-        // Load from file path
-        final file = File(_excelFilePath);
-        if (!await file.exists()) {
-          setState(() {
-            _isLedgerLoaded = false;
-            _loanLookupError = 'Excel file not found at the specified path';
-          });
-          return;
-        }
-        
-        try {
-          bytes = await file.readAsBytes();
-        } catch (e) {
-          setState(() {
-            _isLedgerLoaded = false;
-            _loanLookupError = 'Failed to read file: ${e.toString()}';
-          });
-          return;
-        }
-      } else {
-        // Load from bundled asset
-        final ByteData data = await rootBundle.load('Loan Ledger.xlsx');
-        bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      Uint8List bytes;
+      try {
+        bytes = await file.readAsBytes();
+      } catch (e) {
+        setState(() {
+          _loanLookupError = 'Failed to read file: ${e.toString()}';
+        });
+        return null;
       }
       
       final excel = Excel.decodeBytes(bytes);
       
       if (excel.tables.isEmpty) {
         setState(() {
-          _isLedgerLoaded = false;
           _loanLookupError = 'Excel file contains no sheets';
         });
-        return;
+        return null;
       }
       
       final sheet = excel.tables[excel.tables.keys.first];
-      if (sheet == null) return;
+      if (sheet == null) {
+        setState(() {
+          _loanLookupError = 'Could not read Excel sheet';
+        });
+        return null;
+      }
       
-      final Map<String, Map<String, dynamic>> ledger = {};
-      
-      // Skip header row (index 0) and process data rows
+      // Skip header row (index 0) and search for matching loan number
       for (int i = 1; i < sheet.maxRows; i++) {
         final row = sheet.row(i);
         if (row.isEmpty || row[0]?.value == null) continue;
         
-        final loanDateValue = row[0]?.value;
         final loanNumberValue = row[1]?.value;
-        final amountValue = row[2]?.value;
-        
         if (loanNumberValue == null) continue;
         
-        DateTime? loanDate;
-        if (loanDateValue is DateCellValue) {
-          loanDate = DateTime(
-            loanDateValue.year, 
-            loanDateValue.month, 
-            loanDateValue.day
-          );
-        }
-        
-        double? amount;
-        if (amountValue is IntCellValue) {
-          amount = amountValue.value.toDouble();
-        } else if (amountValue is DoubleCellValue) {
-          amount = amountValue.value;
-        }
-        
-        String loanNumber;
+        String currentLoanNumber;
         if (loanNumberValue is IntCellValue) {
-          loanNumber = loanNumberValue.value.toString();
+          currentLoanNumber = loanNumberValue.value.toString();
         } else if (loanNumberValue is TextCellValue) {
-          // TextCellValue.value returns TextSpan in excel 4.x, use toString() for safe conversion
-          loanNumber = loanNumberValue.value.toString();
+          currentLoanNumber = loanNumberValue.value.toString();
         } else {
-          loanNumber = loanNumberValue.toString();
+          currentLoanNumber = loanNumberValue.toString();
         }
         
-        // Use loan number as key for O(1) lookup
-        ledger[loanNumber] = {
-          'loanDate': loanDate,
-          'amount': amount,
-        };
+        // Check if this is the loan we're looking for
+        if (currentLoanNumber == loanNumber) {
+          final loanDateValue = row[0]?.value;
+          final amountValue = row[2]?.value;
+          
+          DateTime? loanDate;
+          if (loanDateValue is DateCellValue) {
+            loanDate = DateTime(
+              loanDateValue.year, 
+              loanDateValue.month, 
+              loanDateValue.day
+            );
+          }
+          
+          double? amount;
+          if (amountValue is IntCellValue) {
+            amount = amountValue.value.toDouble();
+          } else if (amountValue is DoubleCellValue) {
+            amount = amountValue.value;
+          }
+          
+          setState(() {
+            _isFileConfigured = true;
+          });
+          
+          return {
+            'loanDate': loanDate,
+            'amount': amount,
+          };
+        }
       }
       
+      // Loan number not found but file was read successfully
       setState(() {
-        _loanLedger = ledger;
-        _isLedgerLoaded = true;
+        _isFileConfigured = true;
+      });
+      return null;
+    } catch (e) {
+      setState(() {
+        _loanLookupError = 'Failed to load Excel file: ${e.toString()}';
+      });
+      return null;
+    }
+  }
+
+  /// Check if the configured Excel file exists
+  Future<void> _checkExcelFile() async {
+    if (_excelFilePath.isEmpty) {
+      setState(() {
+        _isFileConfigured = false;
+      });
+      return;
+    }
+    
+    try {
+      final file = File(_excelFilePath);
+      final exists = await file.exists();
+      setState(() {
+        _isFileConfigured = exists;
+        if (!exists) {
+          _loanLookupError = 'Excel file not found. Please select a valid file in Settings.';
+        }
       });
     } catch (e) {
       setState(() {
-        _isLedgerLoaded = false;
-        _loanLookupError = 'Failed to load loan ledger: ${e.toString()}';
+        _isFileConfigured = false;
+        _loanLookupError = 'Error checking file: ${e.toString()}';
       });
     }
   }
 
-  void _lookupLoan() {
+  Future<void> _lookupLoan() async {
     final loanNumber = _loanNumberController.text.trim();
     if (loanNumber.isEmpty) {
       setState(() {
@@ -181,12 +215,17 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
       return;
     }
     
-    // O(1) lookup using Map
-    final loan = _loanLedger[loanNumber];
+    // Load loan data in real-time from Excel file
+    final loan = await _loadLoanFromExcel(loanNumber);
     
     if (loan == null) {
+      // Error already set by _loadLoanFromExcel, or loan not found
+      if (_loanLookupError == null || _loanLookupError!.isEmpty) {
+        setState(() {
+          _loanLookupError = 'Loan number not found in ledger';
+        });
+      }
       setState(() {
-        _loanLookupError = 'Loan number not found in ledger';
         _loanDate = null;
         _loanAmountController.clear();
         _clearResults();
@@ -223,8 +262,8 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
       _excelFilePath = prefs.getString('excel_file_path') ?? '';
       _updateSettingsControllers();
     });
-    // Load loan ledger after settings are loaded
-    _loadLoanLedger();
+    // Check if the Excel file exists
+    _checkExcelFile();
   }
 
   void _updateSettingsControllers() {
@@ -588,7 +627,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Select an Excel file (.xlsx or .xls) from your device. Leave empty to use the bundled file.',
+                        'Select an Excel file (.xlsx or .xls) from your device. The file will be read in real-time when you search.',
                         style: TextStyle(fontSize: 12),
                       ),
                     ),
@@ -620,8 +659,8 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
               }
               // Check if widget is still mounted before using context
               if (!mounted) return;
-              // Reload loan ledger with new Excel file path
-              _loadLoanLedger();
+              // Check if the Excel file exists
+              _checkExcelFile();
               // Recalculate with the new interest rate
               _tryCalculateInterest();
               // Show green success snackbar
@@ -678,7 +717,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                         border: const OutlineInputBorder(),
                         hintText: 'Enter loan number to search',
                         errorText: _loanLookupError,
-                        suffixIcon: _isLedgerLoaded 
+                        suffixIcon: _isFileConfigured 
                             ? const Icon(Icons.check_circle, color: Colors.green)
                             : const Icon(Icons.warning, color: Colors.orange),
                       ),
@@ -693,7 +732,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                   SizedBox(
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: _isLedgerLoaded ? _lookupLoan : null,
+                      onPressed: _lookupLoan,
                       child: const Text('Search'),
                     ),
                   ),
