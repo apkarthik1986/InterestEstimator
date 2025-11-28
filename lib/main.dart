@@ -5,6 +5,7 @@ import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:excel/excel.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const MyApp());
@@ -47,9 +48,11 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   
   // Base settings (configurable via settings dialog)
   double _interestRatePerMonth = 2.0;
+  String _excelFilePath = '';  // Empty means use bundled asset
   
   // Settings dialog controller
   late final TextEditingController _settingsInterestRateController;
+  late final TextEditingController _settingsExcelPathController;
   
   // Interest calculation results
   double? _loanAmount;
@@ -63,14 +66,49 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   void initState() {
     super.initState();
     _settingsInterestRateController = TextEditingController();
+    _settingsExcelPathController = TextEditingController();
     _loadBaseValues();
-    _loadLoanLedger();
   }
 
   Future<void> _loadLoanLedger() async {
     try {
-      final ByteData data = await rootBundle.load('Loan Ledger.xlsx');
-      final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      Uint8List bytes;
+      
+      if (_excelFilePath.isNotEmpty) {
+        // Load from URL - validate URL scheme first
+        final uri = Uri.tryParse(_excelFilePath);
+        if (uri == null || !uri.hasScheme || (uri.scheme != 'http' && uri.scheme != 'https')) {
+          setState(() {
+            _isLedgerLoaded = false;
+            _loanLookupError = 'Invalid URL: Must be a valid HTTP or HTTPS URL';
+          });
+          return;
+        }
+        
+        try {
+          final response = await http.get(uri);
+          if (response.statusCode == 200) {
+            bytes = response.bodyBytes;
+          } else {
+            setState(() {
+              _isLedgerLoaded = false;
+              _loanLookupError = 'Failed to download file: HTTP ${response.statusCode}';
+            });
+            return;
+          }
+        } catch (e) {
+          setState(() {
+            _isLedgerLoaded = false;
+            _loanLookupError = 'Failed to download file: ${e.toString()}';
+          });
+          return;
+        }
+      } else {
+        // Load from bundled asset
+        final ByteData data = await rootBundle.load('Loan Ledger.xlsx');
+        bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      }
+      
       final excel = Excel.decodeBytes(bytes);
       
       if (excel.tables.isEmpty) {
@@ -182,6 +220,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     _loanAmountController.dispose();
     _loanNumberController.dispose();
     _settingsInterestRateController.dispose();
+    _settingsExcelPathController.dispose();
     super.dispose();
   }
 
@@ -189,26 +228,34 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _interestRatePerMonth = prefs.getDouble('interest_rate') ?? 2.0;
+      _excelFilePath = prefs.getString('excel_file_path') ?? '';
       _updateSettingsControllers();
     });
+    // Load loan ledger after settings are loaded
+    _loadLoanLedger();
   }
 
   void _updateSettingsControllers() {
     _settingsInterestRateController.text = _interestRatePerMonth.toString();
+    _settingsExcelPathController.text = _excelFilePath;
   }
 
   Future<void> _saveBaseValues() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('interest_rate', _interestRatePerMonth);
+    await prefs.setString('excel_file_path', _excelFilePath);
   }
 
   Future<void> _resetToDefaults() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _interestRatePerMonth = 2.0;
+      _excelFilePath = '';
       _settingsInterestRateController.text = '2.0';
+      _settingsExcelPathController.text = '';
     });
     await prefs.setDouble('interest_rate', 2.0);
+    await prefs.setString('excel_file_path', '');
   }
 
   /// Calculate months between loan date and today using the Excel logic:
@@ -484,6 +531,40 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                   ],
                 ),
               ),
+              const SizedBox(height: 24),
+              const Text('Excel File Settings',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              TextField(
+                decoration: const InputDecoration(
+                  labelText: 'Excel File URL',
+                  border: OutlineInputBorder(),
+                  hintText: 'Enter URL to Excel file',
+                  prefixIcon: Icon(Icons.link),
+                ),
+                keyboardType: TextInputType.url,
+                controller: _settingsExcelPathController,
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 20, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Enter the URL to download the Excel file. Leave empty to use the bundled file. For Google Sheets, use the export URL.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -501,12 +582,16 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           ),
           ElevatedButton(
             onPressed: () async {
+              // Update values from controllers before saving
+              _excelFilePath = _settingsExcelPathController.text.trim();
               await _saveBaseValues();
               if (dialogContext.mounted) {
                 Navigator.of(dialogContext).pop();
               }
               // Check if widget is still mounted before using context
               if (!mounted) return;
+              // Reload loan ledger with new Excel file path
+              _loadLoanLedger();
               // Recalculate with the new interest rate
               _tryCalculateInterest();
               // Show green success snackbar
