@@ -40,8 +40,8 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   final _loanNumberController = TextEditingController();
   DateTime? _loanDate;
   
-  // Loan ledger data loaded from Excel
-  List<Map<String, dynamic>> _loanLedger = [];
+  // Loan ledger data loaded from Excel - indexed by loan number for O(1) lookup
+  Map<String, Map<String, dynamic>> _loanLedger = {};
   bool _isLedgerLoaded = false;
   String? _loanLookupError;
   
@@ -73,10 +73,18 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
       final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
       final excel = Excel.decodeBytes(bytes);
       
+      if (excel.tables.isEmpty) {
+        setState(() {
+          _isLedgerLoaded = false;
+          _loanLookupError = 'Excel file contains no sheets';
+        });
+        return;
+      }
+      
       final sheet = excel.tables[excel.tables.keys.first];
       if (sheet == null) return;
       
-      final List<Map<String, dynamic>> ledger = [];
+      final Map<String, Map<String, dynamic>> ledger = {};
       
       // Skip header row (index 0) and process data rows
       for (int i = 1; i < sheet.maxRows; i++) {
@@ -114,11 +122,11 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           loanNumber = loanNumberValue.toString();
         }
         
-        ledger.add({
+        // Use loan number as key for O(1) lookup
+        ledger[loanNumber] = {
           'loanDate': loanDate,
-          'loanNumber': loanNumber,
           'amount': amount,
-        });
+        };
       }
       
       setState(() {
@@ -142,13 +150,10 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
       return;
     }
     
-    // Find loan in ledger
-    final loan = _loanLedger.firstWhere(
-      (entry) => entry['loanNumber'] == loanNumber,
-      orElse: () => <String, dynamic>{},
-    );
+    // O(1) lookup using Map
+    final loan = _loanLedger[loanNumber];
     
-    if (loan.isEmpty) {
+    if (loan == null) {
       setState(() {
         _loanLookupError = 'Loan number not found in ledger';
         _loanDate = null;
@@ -580,7 +585,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
               ),
               const SizedBox(height: 16),
               
-              // Loan Amount Input (read-only when populated from lookup)
+              // Loan Amount Input (can be edited manually or populated via lookup)
               TextFormField(
                 controller: _loanAmountController,
                 decoration: const InputDecoration(
