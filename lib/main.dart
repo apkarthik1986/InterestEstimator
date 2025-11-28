@@ -115,7 +115,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
         if (currentLoanNumber == loanNumber) {
           // Column A (index 0) is Date, Column C (index 2) is Amount
           final loanDateStr = row[0].trim();
-          final amountStr = row[2].trim().replaceAll(',', '');
+          final amountStr = _cleanAmount(row[2].trim());
           
           DateTime? loanDate = _parseDate(loanDateStr);
           double? amount = double.tryParse(amountStr);
@@ -144,7 +144,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     }
   }
 
-  /// Parse a CSV row handling quoted fields
+  /// Parse a CSV row handling quoted fields and escaped quotes
   List<String> _parseCsvRow(String row) {
     List<String> result = [];
     bool inQuotes = false;
@@ -153,7 +153,13 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     for (int i = 0; i < row.length; i++) {
       final char = row[i];
       if (char == '"') {
-        inQuotes = !inQuotes;
+        // Check for escaped quote (double quotes)
+        if (i + 1 < row.length && row[i + 1] == '"') {
+          current.write('"');
+          i++; // Skip the next quote
+        } else {
+          inQuotes = !inQuotes;
+        }
       } else if (char == ',' && !inQuotes) {
         result.add(current.toString());
         current = StringBuffer();
@@ -192,6 +198,15 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     }
     
     return null;
+  }
+
+  /// Clean amount string by removing currency symbols and formatting
+  String _cleanAmount(String amount) {
+    // Remove common currency symbols and formatting characters
+    return amount
+        .replaceAll(RegExp(r'[₹$€£¥,\s]'), '')
+        .replaceAll('Rs.', '')
+        .replaceAll('Rs', '');
   }
 
   /// Check if the Google Sheet URL is configured
