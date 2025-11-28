@@ -75,9 +75,18 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
       Uint8List bytes;
       
       if (_excelFilePath.isNotEmpty) {
-        // Load from URL
+        // Load from URL - validate URL scheme first
+        final uri = Uri.tryParse(_excelFilePath);
+        if (uri == null || !uri.hasScheme || (uri.scheme != 'http' && uri.scheme != 'https')) {
+          setState(() {
+            _isLedgerLoaded = false;
+            _loanLookupError = 'Invalid URL: Must be a valid HTTP or HTTPS URL';
+          });
+          return;
+        }
+        
         try {
-          final response = await http.get(Uri.parse(_excelFilePath));
+          final response = await http.get(uri);
           if (response.statusCode == 200) {
             bytes = response.bodyBytes;
           } else {
@@ -535,9 +544,6 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                 ),
                 keyboardType: TextInputType.url,
                 controller: _settingsExcelPathController,
-                onChanged: (value) {
-                  _excelFilePath = value.trim();
-                },
               ),
               const SizedBox(height: 16),
               Container(
@@ -576,6 +582,8 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           ),
           ElevatedButton(
             onPressed: () async {
+              // Update values from controllers before saving
+              _excelFilePath = _settingsExcelPathController.text.trim();
               await _saveBaseValues();
               if (dialogContext.mounted) {
                 Navigator.of(dialogContext).pop();
