@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,7 +6,7 @@ import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:excel/excel.dart';
-import 'package:http/http.dart' as http;
+import 'package:file_picker/file_picker.dart';
 
 void main() {
   runApp(const MyApp());
@@ -75,31 +76,22 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
       Uint8List bytes;
       
       if (_excelFilePath.isNotEmpty) {
-        // Load from URL - validate URL scheme first
-        final uri = Uri.tryParse(_excelFilePath);
-        if (uri == null || !uri.hasScheme || (uri.scheme != 'http' && uri.scheme != 'https')) {
+        // Load from file path
+        final file = File(_excelFilePath);
+        if (!await file.exists()) {
           setState(() {
             _isLedgerLoaded = false;
-            _loanLookupError = 'Invalid URL: Must be a valid HTTP or HTTPS URL';
+            _loanLookupError = 'Excel file not found at the specified path';
           });
           return;
         }
         
         try {
-          final response = await http.get(uri);
-          if (response.statusCode == 200) {
-            bytes = response.bodyBytes;
-          } else {
-            setState(() {
-              _isLedgerLoaded = false;
-              _loanLookupError = 'Failed to download file: HTTP ${response.statusCode}';
-            });
-            return;
-          }
+          bytes = await file.readAsBytes();
         } catch (e) {
           setState(() {
             _isLedgerLoaded = false;
-            _loanLookupError = 'Failed to download file: ${e.toString()}';
+            _loanLookupError = 'Failed to read file: ${e.toString()}';
           });
           return;
         }
@@ -482,6 +474,32 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     );
   }
 
+  Future<void> _pickExcelFile() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx', 'xls'],
+        withData: false,
+      );
+      
+      if (result != null && result.files.single.path != null) {
+        setState(() {
+          _excelFilePath = result.files.single.path!;
+          _settingsExcelPathController.text = _excelFilePath;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking file: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _showSettingsDialog() {
     // Update controller with current value before showing dialog
     _updateSettingsControllers();
@@ -537,13 +555,24 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
               const SizedBox(height: 12),
               TextField(
                 decoration: const InputDecoration(
-                  labelText: 'Excel File URL',
+                  labelText: 'Excel File Path',
                   border: OutlineInputBorder(),
-                  hintText: 'Enter URL to Excel file',
-                  prefixIcon: Icon(Icons.link),
+                  hintText: 'Select an Excel file',
+                  prefixIcon: Icon(Icons.file_present),
                 ),
-                keyboardType: TextInputType.url,
+                readOnly: true,
                 controller: _settingsExcelPathController,
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await _pickExcelFile();
+                  },
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('Browse Excel File'),
+                ),
               ),
               const SizedBox(height: 16),
               Container(
@@ -558,7 +587,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Enter the URL to download the Excel file. Leave empty to use the bundled file. For Google Sheets, use the export URL.',
+                        'Select an Excel file (.xlsx or .xls) from your device. Leave empty to use the bundled file.',
                         style: TextStyle(fontSize: 12),
                       ),
                     ),
