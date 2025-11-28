@@ -1,12 +1,11 @@
-import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:excel/excel.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const MyApp());
@@ -48,11 +47,11 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   
   // Base settings (configurable via settings dialog)
   double _interestRatePerMonth = 2.0;
-  String _excelFilePath = '';  // Path to Excel file selected via file picker
+  String _googleSheetUrl = '';  // URL to Google Sheet (published as CSV)
   
   // Settings dialog controller
   late final TextEditingController _settingsInterestRateController;
-  late final TextEditingController _settingsExcelPathController;
+  late final TextEditingController _settingsGoogleSheetUrlController;
   
   // Interest calculation results
   double? _loanAmount;
@@ -66,95 +65,84 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   void initState() {
     super.initState();
     _settingsInterestRateController = TextEditingController();
-    _settingsExcelPathController = TextEditingController();
+    _settingsGoogleSheetUrlController = TextEditingController();
     _loadBaseValues();
   }
 
-  /// Load loan data from Excel file in real-time for a given loan number
+  /// Load loan data from Google Sheet in real-time for a given loan number
   /// Returns the loan data if found, or null if not found
-  Future<Map<String, dynamic>?> _loadLoanFromExcel(String loanNumber) async {
-    if (_excelFilePath.isEmpty) {
+  Future<Map<String, dynamic>?> _loadLoanFromGoogleSheet(String loanNumber) async {
+    if (_googleSheetUrl.isEmpty) {
       setState(() {
         _isFileConfigured = false;
-        _loanLookupError = 'Please select an Excel file in Settings';
+        _loanLookupError = 'Please configure Google Sheet URL in Settings';
+      });
+      return null;
+    }
+
+    // Validate URL format
+    Uri url;
+    try {
+      url = Uri.parse(_googleSheetUrl);
+      if (!url.hasScheme || !url.hasAuthority) {
+        setState(() {
+          _isFileConfigured = false;
+          _loanLookupError = 'Invalid Google Sheet URL format';
+        });
+        return null;
+      }
+    } catch (e) {
+      setState(() {
+        _isFileConfigured = false;
+        _loanLookupError = 'Invalid Google Sheet URL';
       });
       return null;
     }
 
     try {
-      final file = File(_excelFilePath);
-      if (!await file.exists()) {
+      // Fetch the CSV data from Google Sheets with a timeout
+      final response = await http.get(url).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Request timed out');
+        },
+      );
+      
+      if (response.statusCode != 200) {
         setState(() {
           _isFileConfigured = false;
-          _loanLookupError = 'Excel file not found at the specified path';
+          _loanLookupError = 'Failed to fetch data from Google Sheet (HTTP ${response.statusCode})';
         });
         return null;
       }
       
-      Uint8List bytes;
-      try {
-        bytes = await file.readAsBytes();
-      } catch (e) {
-        setState(() {
-          _loanLookupError = 'Failed to read file: ${e.toString()}';
-        });
-        return null;
-      }
+      final csvContent = response.body;
+      final lines = const LineSplitter().convert(csvContent);
       
-      final excel = Excel.decodeBytes(bytes);
-      
-      if (excel.tables.isEmpty) {
+      if (lines.isEmpty) {
         setState(() {
-          _loanLookupError = 'Excel file contains no sheets';
-        });
-        return null;
-      }
-      
-      final sheet = excel.tables[excel.tables.keys.first];
-      if (sheet == null) {
-        setState(() {
-          _loanLookupError = 'Could not read Excel sheet';
+          _loanLookupError = 'Google Sheet is empty';
         });
         return null;
       }
       
       // Skip header row (index 0) and search for matching loan number
-      for (int i = 1; i < sheet.maxRows; i++) {
-        final row = sheet.row(i);
-        if (row.isEmpty || row[0]?.value == null) continue;
+      for (int i = 1; i < lines.length; i++) {
+        final row = _parseCsvRow(lines[i]);
+        if (row.isEmpty || row[0].isEmpty) continue;
         
-        final loanNumberValue = row[1]?.value;
-        if (loanNumberValue == null) continue;
-        
-        String currentLoanNumber;
-        if (loanNumberValue is IntCellValue) {
-          currentLoanNumber = loanNumberValue.value.toString();
-        } else if (loanNumberValue is TextCellValue) {
-          currentLoanNumber = loanNumberValue.value.toString();
-        } else {
-          currentLoanNumber = loanNumberValue.toString();
-        }
+        // Column B (index 1) is Loan Number
+        if (row.length < 3) continue;
+        final currentLoanNumber = row[1].trim();
         
         // Check if this is the loan we're looking for
         if (currentLoanNumber == loanNumber) {
-          final loanDateValue = row[0]?.value;
-          final amountValue = row[2]?.value;
+          // Column A (index 0) is Date, Column C (index 2) is Amount
+          final loanDateStr = row[0].trim();
+          final amountStr = _cleanAmount(row[2].trim());
           
-          DateTime? loanDate;
-          if (loanDateValue is DateCellValue) {
-            loanDate = DateTime(
-              loanDateValue.year, 
-              loanDateValue.month, 
-              loanDateValue.day
-            );
-          }
-          
-          double? amount;
-          if (amountValue is IntCellValue) {
-            amount = amountValue.value.toDouble();
-          } else if (amountValue is DoubleCellValue) {
-            amount = amountValue.value;
-          }
+          DateTime? loanDate = _parseDate(loanDateStr);
+          double? amount = double.tryParse(amountStr);
           
           setState(() {
             _isFileConfigured = true;
@@ -167,43 +155,99 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
         }
       }
       
-      // Loan number not found but file was read successfully
+      // Loan number not found but data was fetched successfully
       setState(() {
         _isFileConfigured = true;
       });
       return null;
     } catch (e) {
       setState(() {
-        _loanLookupError = 'Failed to load Excel file: ${e.toString()}';
+        _loanLookupError = 'Failed to load data: ${e.toString()}';
       });
       return null;
     }
   }
 
-  /// Check if the configured Excel file exists
-  Future<void> _checkExcelFile() async {
-    if (_excelFilePath.isEmpty) {
-      setState(() {
-        _isFileConfigured = false;
-      });
-      return;
+  /// Parse a CSV row handling quoted fields and escaped quotes
+  List<String> _parseCsvRow(String row) {
+    List<String> result = [];
+    bool inQuotes = false;
+    StringBuffer current = StringBuffer();
+    
+    for (int i = 0; i < row.length; i++) {
+      final char = row[i];
+      if (char == '"') {
+        // Check for escaped quote (double quotes)
+        if (i + 1 < row.length && row[i + 1] == '"') {
+          current.write('"');
+          i++; // Skip the next quote
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char == ',' && !inQuotes) {
+        result.add(current.toString());
+        current = StringBuffer();
+      } else {
+        current.write(char);
+      }
     }
+    result.add(current.toString());
+    return result;
+  }
+
+  /// Parse date from various formats
+  DateTime? _parseDate(String dateStr) {
+    if (dateStr.isEmpty) return null;
     
     try {
-      final file = File(_excelFilePath);
-      final exists = await file.exists();
-      setState(() {
-        _isFileConfigured = exists;
-        if (!exists) {
-          _loanLookupError = 'Excel file not found. Please select a valid file in Settings.';
+      // Try DD/MM/YYYY format
+      final parts = dateStr.split('/');
+      if (parts.length == 3) {
+        final day = int.tryParse(parts[0]);
+        final month = int.tryParse(parts[1]);
+        final year = int.tryParse(parts[2]);
+        if (day != null && month != null && year != null &&
+            month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+          return DateTime(year, month, day);
         }
-      });
+      }
+      
+      // Try YYYY-MM-DD format
+      final isoParts = dateStr.split('-');
+      if (isoParts.length == 3) {
+        final year = int.tryParse(isoParts[0]);
+        final month = int.tryParse(isoParts[1]);
+        final day = int.tryParse(isoParts[2]);
+        if (year != null && month != null && day != null &&
+            month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+          return DateTime(year, month, day);
+        }
+      }
     } catch (e) {
-      setState(() {
-        _isFileConfigured = false;
-        _loanLookupError = 'Error checking file: ${e.toString()}';
-      });
+      // Return null for any invalid date
+      return null;
     }
+    
+    return null;
+  }
+
+  /// Clean amount string by removing currency symbols and formatting
+  String _cleanAmount(String amount) {
+    // Remove common currency symbols and formatting characters
+    return amount
+        .replaceAll(RegExp(r'[₹$€£¥,\s]'), '')
+        .replaceAll('Rs.', '')
+        .replaceAll('Rs', '');
+  }
+
+  /// Check if the Google Sheet URL is configured
+  void _checkGoogleSheetUrl() {
+    setState(() {
+      _isFileConfigured = _googleSheetUrl.isNotEmpty;
+      if (!_isFileConfigured) {
+        _loanLookupError = 'Please configure Google Sheet URL in Settings';
+      }
+    });
   }
 
   Future<void> _lookupLoan() async {
@@ -215,11 +259,11 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
       return;
     }
     
-    // Load loan data in real-time from Excel file
-    final loan = await _loadLoanFromExcel(loanNumber);
+    // Load loan data in real-time from Google Sheet
+    final loan = await _loadLoanFromGoogleSheet(loanNumber);
     
     if (loan == null) {
-      // Error already set by _loadLoanFromExcel, or loan not found
+      // Error already set by _loadLoanFromGoogleSheet, or loan not found
       setState(() {
         if (_loanLookupError == null || _loanLookupError!.isEmpty) {
           _loanLookupError = 'Loan number not found in ledger';
@@ -249,7 +293,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     _loanAmountController.dispose();
     _loanNumberController.dispose();
     _settingsInterestRateController.dispose();
-    _settingsExcelPathController.dispose();
+    _settingsGoogleSheetUrlController.dispose();
     super.dispose();
   }
 
@@ -257,34 +301,34 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _interestRatePerMonth = prefs.getDouble('interest_rate') ?? 2.0;
-      _excelFilePath = prefs.getString('excel_file_path') ?? '';
+      _googleSheetUrl = prefs.getString('google_sheet_url') ?? '';
       _updateSettingsControllers();
     });
-    // Check if the Excel file exists
-    _checkExcelFile();
+    // Check if the Google Sheet URL is configured
+    _checkGoogleSheetUrl();
   }
 
   void _updateSettingsControllers() {
     _settingsInterestRateController.text = _interestRatePerMonth.toString();
-    _settingsExcelPathController.text = _excelFilePath;
+    _settingsGoogleSheetUrlController.text = _googleSheetUrl;
   }
 
   Future<void> _saveBaseValues() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('interest_rate', _interestRatePerMonth);
-    await prefs.setString('excel_file_path', _excelFilePath);
+    await prefs.setString('google_sheet_url', _googleSheetUrl);
   }
 
   Future<void> _resetToDefaults() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _interestRatePerMonth = 2.0;
-      _excelFilePath = '';
+      _googleSheetUrl = '';
       _settingsInterestRateController.text = '2.0';
-      _settingsExcelPathController.text = '';
+      _settingsGoogleSheetUrlController.text = '';
     });
     await prefs.setDouble('interest_rate', 2.0);
-    await prefs.setString('excel_file_path', '');
+    await prefs.setString('google_sheet_url', '');
   }
 
   /// Calculate months between loan date and today using the Excel logic:
@@ -511,33 +555,6 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     );
   }
 
-  Future<void> _pickExcelFile() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['xlsx', 'xls'],
-        allowMultiple: false,
-        withData: false,
-      );
-      
-      if (result != null && result.files.isNotEmpty && result.files.single.path != null) {
-        setState(() {
-          _excelFilePath = result.files.single.path!;
-          _settingsExcelPathController.text = _excelFilePath;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error picking file: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   void _showSettingsDialog() {
     // Update controller with current value before showing dialog
     _updateSettingsControllers();
@@ -588,46 +605,72 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text('Excel File Settings',
+              const Text('Google Sheet Settings',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               TextField(
                 decoration: const InputDecoration(
-                  labelText: 'Excel File Path',
+                  labelText: 'Google Sheet CSV URL',
                   border: OutlineInputBorder(),
-                  hintText: 'Select an Excel file',
-                  prefixIcon: Icon(Icons.file_present),
+                  hintText: 'Paste published CSV URL here',
+                  prefixIcon: Icon(Icons.link),
                 ),
-                readOnly: true,
-                controller: _settingsExcelPathController,
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    await _pickExcelFile();
-                  },
-                  icon: const Icon(Icons.folder_open),
-                  label: const Text('Browse Excel File'),
-                ),
+                controller: _settingsGoogleSheetUrlController,
+                maxLines: 2,
               ),
               const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.help_outline, size: 20, color: Colors.green),
+                        SizedBox(width: 8),
+                        Text('How to get the URL:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      '1. Open your Google Sheet\n'
+                      '2. Go to File → Share → Publish to web\n'
+                      '3. Select the sheet tab\n'
+                      '4. Choose "Comma-separated values (.csv)"\n'
+                      '5. Click Publish and copy the URL',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.orange.shade50,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Row(
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.info_outline, size: 20, color: Colors.orange),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Select an Excel file (.xlsx or .xls) from your device. The file will be read in real-time when you search.',
-                        style: TextStyle(fontSize: 12),
-                      ),
+                    Row(
+                      children: [
+                        Icon(Icons.table_chart, size: 20, color: Colors.orange),
+                        SizedBox(width: 8),
+                        Text('Excel Format:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Column A: Date (DD/MM/YYYY)\n'
+                      'Column B: Loan Number\n'
+                      'Column C: Amount\n'
+                      'Row 1 should be headers.',
+                      style: TextStyle(fontSize: 11),
                     ),
                   ],
                 ),
@@ -650,15 +693,15 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           ElevatedButton(
             onPressed: () async {
               // Update values from controllers before saving
-              _excelFilePath = _settingsExcelPathController.text.trim();
+              _googleSheetUrl = _settingsGoogleSheetUrlController.text.trim();
               await _saveBaseValues();
               if (dialogContext.mounted) {
                 Navigator.of(dialogContext).pop();
               }
               // Check if widget is still mounted before using context
               if (!mounted) return;
-              // Check if the Excel file exists
-              _checkExcelFile();
+              // Check if the Google Sheet URL is configured
+              _checkGoogleSheetUrl();
               // Recalculate with the new interest rate
               _tryCalculateInterest();
               // Show green success snackbar

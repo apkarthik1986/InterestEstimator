@@ -47,9 +47,8 @@ void main() {
     // Settings dialog should appear
     expect(find.text('⚙️ Base Settings'), findsOneWidget);
     expect(find.text('Interest Rate (% per month)'), findsOneWidget);
-    expect(find.text('Excel File Path'), findsOneWidget);
-    expect(find.text('Excel File Settings'), findsOneWidget);
-    expect(find.text('Browse Excel File'), findsOneWidget);
+    expect(find.text('Google Sheet CSV URL'), findsOneWidget);
+    expect(find.text('Google Sheet Settings'), findsOneWidget);
   });
 
   testWidgets('Date picker can be opened', (WidgetTester tester) async {
