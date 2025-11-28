@@ -479,10 +479,11 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'xls'],
+        allowMultiple: false,
         withData: false,
       );
       
-      if (result != null && result.files.single.path != null) {
+      if (result != null && result.files.isNotEmpty && result.files.single.path != null) {
         setState(() {
           _excelFilePath = result.files.single.path!;
           _settingsExcelPathController.text = _excelFilePath;
