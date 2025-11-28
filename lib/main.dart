@@ -117,7 +117,8 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
         if (loanNumberValue is IntCellValue) {
           loanNumber = loanNumberValue.value.toString();
         } else if (loanNumberValue is TextCellValue) {
-          loanNumber = loanNumberValue.value;
+          // TextCellValue.value returns TextSpan in excel 4.x, use toString() for safe conversion
+          loanNumber = loanNumberValue.value.toString();
         } else {
           loanNumber = loanNumberValue.toString();
         }
