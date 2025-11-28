@@ -220,16 +220,14 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     
     if (loan == null) {
       // Error already set by _loadLoanFromExcel, or loan not found
-      if (_loanLookupError == null || _loanLookupError!.isEmpty) {
-        setState(() {
-          _loanLookupError = 'Loan number not found in ledger';
-        });
-      }
       setState(() {
+        if (_loanLookupError == null || _loanLookupError!.isEmpty) {
+          _loanLookupError = 'Loan number not found in ledger';
+        }
         _loanDate = null;
         _loanAmountController.clear();
-        _clearResults();
       });
+      _clearResults();
       return;
     }
     
