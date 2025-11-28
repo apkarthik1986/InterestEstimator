@@ -102,7 +102,7 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     try {
       // Fetch the CSV data from Google Sheets with a timeout
       final response = await http.get(url).timeout(
-        const Duration(seconds: 30),
+        const Duration(seconds: 15),
         onTimeout: () {
           throw Exception('Request timed out');
         },
