@@ -80,9 +80,33 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
       return null;
     }
 
+    // Validate URL format
+    Uri url;
     try {
-      // Fetch the CSV data from Google Sheets
-      final response = await http.get(Uri.parse(_googleSheetUrl));
+      url = Uri.parse(_googleSheetUrl);
+      if (!url.hasScheme || !url.hasAuthority) {
+        setState(() {
+          _isFileConfigured = false;
+          _loanLookupError = 'Invalid Google Sheet URL format';
+        });
+        return null;
+      }
+    } catch (e) {
+      setState(() {
+        _isFileConfigured = false;
+        _loanLookupError = 'Invalid Google Sheet URL';
+      });
+      return null;
+    }
+
+    try {
+      // Fetch the CSV data from Google Sheets with a timeout
+      final response = await http.get(url).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Request timed out');
+        },
+      );
       
       if (response.statusCode != 200) {
         setState(() {
@@ -175,26 +199,33 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   DateTime? _parseDate(String dateStr) {
     if (dateStr.isEmpty) return null;
     
-    // Try DD/MM/YYYY format
-    final parts = dateStr.split('/');
-    if (parts.length == 3) {
-      final day = int.tryParse(parts[0]);
-      final month = int.tryParse(parts[1]);
-      final year = int.tryParse(parts[2]);
-      if (day != null && month != null && year != null) {
-        return DateTime(year, month, day);
+    try {
+      // Try DD/MM/YYYY format
+      final parts = dateStr.split('/');
+      if (parts.length == 3) {
+        final day = int.tryParse(parts[0]);
+        final month = int.tryParse(parts[1]);
+        final year = int.tryParse(parts[2]);
+        if (day != null && month != null && year != null &&
+            month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+          return DateTime(year, month, day);
+        }
       }
-    }
-    
-    // Try YYYY-MM-DD format
-    final isoParts = dateStr.split('-');
-    if (isoParts.length == 3) {
-      final year = int.tryParse(isoParts[0]);
-      final month = int.tryParse(isoParts[1]);
-      final day = int.tryParse(isoParts[2]);
-      if (year != null && month != null && day != null) {
-        return DateTime(year, month, day);
+      
+      // Try YYYY-MM-DD format
+      final isoParts = dateStr.split('-');
+      if (isoParts.length == 3) {
+        final year = int.tryParse(isoParts[0]);
+        final month = int.tryParse(isoParts[1]);
+        final day = int.tryParse(isoParts[2]);
+        if (year != null && month != null && day != null &&
+            month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+          return DateTime(year, month, day);
+        }
       }
+    } catch (e) {
+      // Return null for any invalid date
+      return null;
     }
     
     return null;
