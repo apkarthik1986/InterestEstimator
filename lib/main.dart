@@ -1,9 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:excel/excel.dart';
+import 'package:file_picker/file_picker.dart';
 
 void main() {
   runApp(const MyApp());
@@ -36,13 +39,21 @@ class InterestCalculatorPage extends StatefulWidget {
 class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   final _formKey = GlobalKey<FormState>();
   final _loanAmountController = TextEditingController();
+  final _loanNumberController = TextEditingController();
   DateTime? _loanDate;
+  
+  // Loan ledger data loaded from Excel - indexed by loan number for O(1) lookup
+  Map<String, Map<String, dynamic>> _loanLedger = {};
+  bool _isLedgerLoaded = false;
+  String? _loanLookupError;
   
   // Base settings (configurable via settings dialog)
   double _interestRatePerMonth = 2.0;
+  String _excelFilePath = '';  // Empty means use bundled asset
   
   // Settings dialog controller
   late final TextEditingController _settingsInterestRateController;
+  late final TextEditingController _settingsExcelPathController;
   
   // Interest calculation results
   double? _loanAmount;
@@ -56,13 +67,152 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   void initState() {
     super.initState();
     _settingsInterestRateController = TextEditingController();
+    _settingsExcelPathController = TextEditingController();
     _loadBaseValues();
+  }
+
+  Future<void> _loadLoanLedger() async {
+    try {
+      Uint8List bytes;
+      
+      if (_excelFilePath.isNotEmpty) {
+        // Load from file path
+        final file = File(_excelFilePath);
+        if (!await file.exists()) {
+          setState(() {
+            _isLedgerLoaded = false;
+            _loanLookupError = 'Excel file not found at the specified path';
+          });
+          return;
+        }
+        
+        try {
+          bytes = await file.readAsBytes();
+        } catch (e) {
+          setState(() {
+            _isLedgerLoaded = false;
+            _loanLookupError = 'Failed to read file: ${e.toString()}';
+          });
+          return;
+        }
+      } else {
+        // Load from bundled asset
+        final ByteData data = await rootBundle.load('Loan Ledger.xlsx');
+        bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      }
+      
+      final excel = Excel.decodeBytes(bytes);
+      
+      if (excel.tables.isEmpty) {
+        setState(() {
+          _isLedgerLoaded = false;
+          _loanLookupError = 'Excel file contains no sheets';
+        });
+        return;
+      }
+      
+      final sheet = excel.tables[excel.tables.keys.first];
+      if (sheet == null) return;
+      
+      final Map<String, Map<String, dynamic>> ledger = {};
+      
+      // Skip header row (index 0) and process data rows
+      for (int i = 1; i < sheet.maxRows; i++) {
+        final row = sheet.row(i);
+        if (row.isEmpty || row[0]?.value == null) continue;
+        
+        final loanDateValue = row[0]?.value;
+        final loanNumberValue = row[1]?.value;
+        final amountValue = row[2]?.value;
+        
+        if (loanNumberValue == null) continue;
+        
+        DateTime? loanDate;
+        if (loanDateValue is DateCellValue) {
+          loanDate = DateTime(
+            loanDateValue.year, 
+            loanDateValue.month, 
+            loanDateValue.day
+          );
+        }
+        
+        double? amount;
+        if (amountValue is IntCellValue) {
+          amount = amountValue.value.toDouble();
+        } else if (amountValue is DoubleCellValue) {
+          amount = amountValue.value;
+        }
+        
+        String loanNumber;
+        if (loanNumberValue is IntCellValue) {
+          loanNumber = loanNumberValue.value.toString();
+        } else if (loanNumberValue is TextCellValue) {
+          // TextCellValue.value returns TextSpan in excel 4.x, use toString() for safe conversion
+          loanNumber = loanNumberValue.value.toString();
+        } else {
+          loanNumber = loanNumberValue.toString();
+        }
+        
+        // Use loan number as key for O(1) lookup
+        ledger[loanNumber] = {
+          'loanDate': loanDate,
+          'amount': amount,
+        };
+      }
+      
+      setState(() {
+        _loanLedger = ledger;
+        _isLedgerLoaded = true;
+      });
+    } catch (e) {
+      setState(() {
+        _isLedgerLoaded = false;
+        _loanLookupError = 'Failed to load loan ledger: ${e.toString()}';
+      });
+    }
+  }
+
+  void _lookupLoan() {
+    final loanNumber = _loanNumberController.text.trim();
+    if (loanNumber.isEmpty) {
+      setState(() {
+        _loanLookupError = null;
+      });
+      return;
+    }
+    
+    // O(1) lookup using Map
+    final loan = _loanLedger[loanNumber];
+    
+    if (loan == null) {
+      setState(() {
+        _loanLookupError = 'Loan number not found in ledger';
+        _loanDate = null;
+        _loanAmountController.clear();
+        _clearResults();
+      });
+      return;
+    }
+    
+    setState(() {
+      _loanLookupError = null;
+      _loanDate = loan['loanDate'] as DateTime?;
+      final amount = loan['amount'] as double?;
+      if (amount != null) {
+        _loanAmountController.text = amount.round().toString();
+      }
+    });
+    
+    // Trigger interest calculation
+    _tryCalculateInterest();
   }
 
   @override
   void dispose() {
     _loanAmountController.dispose();
+    _loanNumberController.dispose();
     _settingsInterestRateController.dispose();
+    _settingsExcelPathController.dispose();
     super.dispose();
   }
 
@@ -70,26 +220,34 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _interestRatePerMonth = prefs.getDouble('interest_rate') ?? 2.0;
+      _excelFilePath = prefs.getString('excel_file_path') ?? '';
       _updateSettingsControllers();
     });
+    // Load loan ledger after settings are loaded
+    _loadLoanLedger();
   }
 
   void _updateSettingsControllers() {
     _settingsInterestRateController.text = _interestRatePerMonth.toString();
+    _settingsExcelPathController.text = _excelFilePath;
   }
 
   Future<void> _saveBaseValues() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('interest_rate', _interestRatePerMonth);
+    await prefs.setString('excel_file_path', _excelFilePath);
   }
 
   Future<void> _resetToDefaults() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _interestRatePerMonth = 2.0;
+      _excelFilePath = '';
       _settingsInterestRateController.text = '2.0';
+      _settingsExcelPathController.text = '';
     });
     await prefs.setDouble('interest_rate', 2.0);
+    await prefs.setString('excel_file_path', '');
   }
 
   /// Calculate months between loan date and today using the Excel logic:
@@ -166,7 +324,9 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   void _reset() {
     setState(() {
       _loanAmountController.clear();
+      _loanNumberController.clear();
       _loanDate = null;
+      _loanLookupError = null;
       _clearResults();
     });
   }
@@ -314,6 +474,33 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     );
   }
 
+  Future<void> _pickExcelFile() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx', 'xls'],
+        allowMultiple: false,
+        withData: false,
+      );
+      
+      if (result != null && result.files.isNotEmpty && result.files.single.path != null) {
+        setState(() {
+          _excelFilePath = result.files.single.path!;
+          _settingsExcelPathController.text = _excelFilePath;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking file: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _showSettingsDialog() {
     // Update controller with current value before showing dialog
     _updateSettingsControllers();
@@ -363,6 +550,51 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
                   ],
                 ),
               ),
+              const SizedBox(height: 24),
+              const Text('Excel File Settings',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              TextField(
+                decoration: const InputDecoration(
+                  labelText: 'Excel File Path',
+                  border: OutlineInputBorder(),
+                  hintText: 'Select an Excel file',
+                  prefixIcon: Icon(Icons.file_present),
+                ),
+                readOnly: true,
+                controller: _settingsExcelPathController,
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await _pickExcelFile();
+                  },
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('Browse Excel File'),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 20, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Select an Excel file (.xlsx or .xls) from your device. Leave empty to use the bundled file.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -380,12 +612,16 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           ),
           ElevatedButton(
             onPressed: () async {
+              // Update values from controllers before saving
+              _excelFilePath = _settingsExcelPathController.text.trim();
               await _saveBaseValues();
               if (dialogContext.mounted) {
                 Navigator.of(dialogContext).pop();
               }
               // Check if widget is still mounted before using context
               if (!mounted) return;
+              // Reload loan ledger with new Excel file path
+              _loadLoanLedger();
               // Recalculate with the new interest rate
               _tryCalculateInterest();
               // Show green success snackbar
@@ -430,7 +666,42 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Loan Amount Input
+              // Loan Number Input with Search
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _loanNumberController,
+                      decoration: InputDecoration(
+                        labelText: 'Loan Number',
+                        border: const OutlineInputBorder(),
+                        hintText: 'Enter loan number to search',
+                        errorText: _loanLookupError,
+                        suffixIcon: _isLedgerLoaded 
+                            ? const Icon(Icons.check_circle, color: Colors.green)
+                            : const Icon(Icons.warning, color: Colors.orange),
+                      ),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      onFieldSubmitted: (_) => _lookupLoan(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: _isLedgerLoaded ? _lookupLoan : null,
+                      child: const Text('Search'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              
+              // Loan Amount Input (can be edited manually or populated via lookup)
               TextFormField(
                 controller: _loanAmountController,
                 decoration: const InputDecoration(
