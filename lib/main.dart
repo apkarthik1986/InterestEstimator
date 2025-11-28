@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:excel/excel.dart';
 
 void main() {
   runApp(const MyApp());
@@ -36,7 +37,13 @@ class InterestCalculatorPage extends StatefulWidget {
 class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   final _formKey = GlobalKey<FormState>();
   final _loanAmountController = TextEditingController();
+  final _loanNumberController = TextEditingController();
   DateTime? _loanDate;
+  
+  // Loan ledger data loaded from Excel - indexed by loan number for O(1) lookup
+  Map<String, Map<String, dynamic>> _loanLedger = {};
+  bool _isLedgerLoaded = false;
+  String? _loanLookupError;
   
   // Base settings (configurable via settings dialog)
   double _interestRatePerMonth = 2.0;
@@ -57,11 +64,122 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
     super.initState();
     _settingsInterestRateController = TextEditingController();
     _loadBaseValues();
+    _loadLoanLedger();
+  }
+
+  Future<void> _loadLoanLedger() async {
+    try {
+      final ByteData data = await rootBundle.load('Loan Ledger.xlsx');
+      final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      final excel = Excel.decodeBytes(bytes);
+      
+      if (excel.tables.isEmpty) {
+        setState(() {
+          _isLedgerLoaded = false;
+          _loanLookupError = 'Excel file contains no sheets';
+        });
+        return;
+      }
+      
+      final sheet = excel.tables[excel.tables.keys.first];
+      if (sheet == null) return;
+      
+      final Map<String, Map<String, dynamic>> ledger = {};
+      
+      // Skip header row (index 0) and process data rows
+      for (int i = 1; i < sheet.maxRows; i++) {
+        final row = sheet.row(i);
+        if (row.isEmpty || row[0]?.value == null) continue;
+        
+        final loanDateValue = row[0]?.value;
+        final loanNumberValue = row[1]?.value;
+        final amountValue = row[2]?.value;
+        
+        if (loanNumberValue == null) continue;
+        
+        DateTime? loanDate;
+        if (loanDateValue is DateCellValue) {
+          loanDate = DateTime(
+            loanDateValue.year, 
+            loanDateValue.month, 
+            loanDateValue.day
+          );
+        }
+        
+        double? amount;
+        if (amountValue is IntCellValue) {
+          amount = amountValue.value.toDouble();
+        } else if (amountValue is DoubleCellValue) {
+          amount = amountValue.value;
+        }
+        
+        String loanNumber;
+        if (loanNumberValue is IntCellValue) {
+          loanNumber = loanNumberValue.value.toString();
+        } else if (loanNumberValue is TextCellValue) {
+          loanNumber = loanNumberValue.value;
+        } else {
+          loanNumber = loanNumberValue.toString();
+        }
+        
+        // Use loan number as key for O(1) lookup
+        ledger[loanNumber] = {
+          'loanDate': loanDate,
+          'amount': amount,
+        };
+      }
+      
+      setState(() {
+        _loanLedger = ledger;
+        _isLedgerLoaded = true;
+      });
+    } catch (e) {
+      setState(() {
+        _isLedgerLoaded = false;
+        _loanLookupError = 'Failed to load loan ledger: ${e.toString()}';
+      });
+    }
+  }
+
+  void _lookupLoan() {
+    final loanNumber = _loanNumberController.text.trim();
+    if (loanNumber.isEmpty) {
+      setState(() {
+        _loanLookupError = null;
+      });
+      return;
+    }
+    
+    // O(1) lookup using Map
+    final loan = _loanLedger[loanNumber];
+    
+    if (loan == null) {
+      setState(() {
+        _loanLookupError = 'Loan number not found in ledger';
+        _loanDate = null;
+        _loanAmountController.clear();
+        _clearResults();
+      });
+      return;
+    }
+    
+    setState(() {
+      _loanLookupError = null;
+      _loanDate = loan['loanDate'] as DateTime?;
+      final amount = loan['amount'] as double?;
+      if (amount != null) {
+        _loanAmountController.text = amount.round().toString();
+      }
+    });
+    
+    // Trigger interest calculation
+    _tryCalculateInterest();
   }
 
   @override
   void dispose() {
     _loanAmountController.dispose();
+    _loanNumberController.dispose();
     _settingsInterestRateController.dispose();
     super.dispose();
   }
@@ -166,7 +284,9 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
   void _reset() {
     setState(() {
       _loanAmountController.clear();
+      _loanNumberController.clear();
       _loanDate = null;
+      _loanLookupError = null;
       _clearResults();
     });
   }
@@ -430,7 +550,42 @@ class _InterestCalculatorPageState extends State<InterestCalculatorPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Loan Amount Input
+              // Loan Number Input with Search
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _loanNumberController,
+                      decoration: InputDecoration(
+                        labelText: 'Loan Number',
+                        border: const OutlineInputBorder(),
+                        hintText: 'Enter loan number to search',
+                        errorText: _loanLookupError,
+                        suffixIcon: _isLedgerLoaded 
+                            ? const Icon(Icons.check_circle, color: Colors.green)
+                            : const Icon(Icons.warning, color: Colors.orange),
+                      ),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      onFieldSubmitted: (_) => _lookupLoan(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: _isLedgerLoaded ? _lookupLoan : null,
+                      child: const Text('Search'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              
+              // Loan Amount Input (can be edited manually or populated via lookup)
               TextFormField(
                 controller: _loanAmountController,
                 decoration: const InputDecoration(
