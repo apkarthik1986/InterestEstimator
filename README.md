@@ -8,6 +8,44 @@ A simple Flutter application for calculating pawn broker loan interest.
 - **Configurable Interest Rate**: Set your own monthly interest rate (default: 2%)
 - **Auto-calculation**: Automatically calculates duration from loan date to today
 - **Clear Summary**: Shows loan amount, duration, interest breakdown, and total amount
+- **Google Sheets Integration**: Link to your Google Drive Excel file for real-time loan lookup
+
+## Google Sheets Setup
+
+### Excel Format
+
+Your Google Sheet should have the following columns:
+
+| Column A | Column B | Column C |
+|----------|----------|----------|
+| Date | Loan Number | Amount |
+| 15/06/2024 | 12345 | 50000 |
+| 20/07/2024 | 12346 | 75000 |
+
+- **Column A**: Date in DD/MM/YYYY format
+- **Column B**: Loan Number (numeric)
+- **Column C**: Loan Amount (numeric)
+- **Row 1**: Should contain headers
+
+### Publishing Your Google Sheet
+
+1. Open your Google Sheet in Google Drive
+2. Go to **File → Share → Publish to web**
+3. In the dialog that opens:
+   - Select the specific sheet tab (e.g., "Sheet1")
+   - Choose **Comma-separated values (.csv)** as the format
+4. Click **Publish**
+5. Copy the generated URL
+6. In the app, go to **Settings** (gear icon) and paste the URL in the "Google Sheet CSV URL" field
+
+### Permissions
+
+- Your Google Sheet only needs to be **Published to web** (File → Share → Publish to web)
+- You do NOT need to share the sheet publicly or with anyone
+- The published CSV link allows read-only access to the data
+- Changes made to the Google Sheet are automatically reflected when you click **Search** in the app (real-time updates)
+
+**Note**: Publishing to web is different from sharing. Your sheet remains private, but the published CSV link can be accessed by anyone with the URL.
 
 ## Interest Calculation
 
